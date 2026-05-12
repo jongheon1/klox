@@ -1,42 +1,4 @@
-import TokenType.AND
-import TokenType.BANG
-import TokenType.BANG_EQUAL
-import TokenType.CLASS
-import TokenType.COMMA
-import TokenType.DOT
-import TokenType.ELSE
-import TokenType.EOF
-import TokenType.EQUAL
-import TokenType.EQUAL_EQUAL
-import TokenType.FALSE
-import TokenType.FOR
-import TokenType.FUN
-import TokenType.GREATER
-import TokenType.GREATER_EQUAL
-import TokenType.IDENTIFIER
-import TokenType.IF
-import TokenType.LEFT_BRACE
-import TokenType.LEFT_PAREN
-import TokenType.LESS
-import TokenType.LESS_EQUAL
-import TokenType.MINUS
-import TokenType.NIL
-import TokenType.NUMBER
-import TokenType.OR
-import TokenType.PLUS
-import TokenType.PRINT
-import TokenType.RETURN
-import TokenType.RIGHT_BRACE
-import TokenType.RIGHT_PAREN
-import TokenType.SEMICOLON
-import TokenType.SLASH
-import TokenType.STAR
-import TokenType.STRING
-import TokenType.SUPER
-import TokenType.THIS
-import TokenType.TRUE
-import TokenType.VAR
-import TokenType.WHILE
+package lox
 
 class Scanner(
     private val source: String,
@@ -49,22 +11,22 @@ class Scanner(
     companion object {
         private val keywords: Map<String, TokenType> =
             mapOf(
-                "and" to AND,
-                "class" to CLASS,
-                "else" to ELSE,
-                "false" to FALSE,
-                "for" to FOR,
-                "fun" to FUN,
-                "if" to IF,
-                "nil" to NIL,
-                "or" to OR,
-                "print" to PRINT,
-                "return" to RETURN,
-                "super" to SUPER,
-                "this" to THIS,
-                "true" to TRUE,
-                "var" to VAR,
-                "while" to WHILE,
+                "and" to TokenType.AND,
+                "class" to TokenType.CLASS,
+                "else" to TokenType.ELSE,
+                "false" to TokenType.FALSE,
+                "for" to TokenType.FOR,
+                "fun" to TokenType.FUN,
+                "if" to TokenType.IF,
+                "nil" to TokenType.NIL,
+                "or" to TokenType.OR,
+                "print" to TokenType.PRINT,
+                "return" to TokenType.RETURN,
+                "super" to TokenType.SUPER,
+                "this" to TokenType.THIS,
+                "true" to TokenType.TRUE,
+                "var" to TokenType.VAR,
+                "while" to TokenType.WHILE,
             )
     }
 
@@ -74,7 +36,7 @@ class Scanner(
             scanToken()
         }
 
-        tokens.add(Token(EOF, "", null, line))
+        tokens.add(Token(TokenType.EOF, "", null, line))
         return tokens
     }
 
@@ -84,59 +46,59 @@ class Scanner(
         val c = advance()
         when (c) {
             '(' -> {
-                addToken(LEFT_PAREN)
+                addToken(TokenType.LEFT_PAREN)
             }
 
             ')' -> {
-                addToken(RIGHT_PAREN)
+                addToken(TokenType.RIGHT_PAREN)
             }
 
             '{' -> {
-                addToken(LEFT_BRACE)
+                addToken(TokenType.LEFT_BRACE)
             }
 
             '}' -> {
-                addToken(RIGHT_BRACE)
+                addToken(TokenType.RIGHT_BRACE)
             }
 
             ',' -> {
-                addToken(COMMA)
+                addToken(TokenType.COMMA)
             }
 
             '.' -> {
-                addToken(DOT)
+                addToken(TokenType.DOT)
             }
 
             '-' -> {
-                addToken(MINUS)
+                addToken(TokenType.MINUS)
             }
 
             '+' -> {
-                addToken(PLUS)
+                addToken(TokenType.PLUS)
             }
 
             ';' -> {
-                addToken(SEMICOLON)
+                addToken(TokenType.SEMICOLON)
             }
 
             '*' -> {
-                addToken(STAR)
+                addToken(TokenType.STAR)
             }
 
             '!' -> {
-                addToken(if (match('=')) BANG_EQUAL else BANG)
+                addToken(if (match('=')) TokenType.BANG_EQUAL else TokenType.BANG)
             }
 
             '=' -> {
-                addToken(if (match('=')) EQUAL_EQUAL else EQUAL)
+                addToken(if (match('=')) TokenType.EQUAL_EQUAL else TokenType.EQUAL)
             }
 
             '<' -> {
-                addToken(if (match('=')) LESS_EQUAL else LESS)
+                addToken(if (match('=')) TokenType.LESS_EQUAL else TokenType.LESS)
             }
 
             '>' -> {
-                addToken(if (match('=')) GREATER_EQUAL else GREATER)
+                addToken(if (match('=')) TokenType.GREATER_EQUAL else TokenType.GREATER)
             }
 
             '/' -> {
@@ -145,7 +107,7 @@ class Scanner(
                 } else if (match('*')) {
                     blockComment()
                 } else {
-                    addToken(SLASH)
+                    addToken(TokenType.SLASH)
                 }
             }
 
@@ -205,7 +167,7 @@ class Scanner(
         }
         advance()
         val value = source.substring(start + 1, current - 1)
-        addToken(STRING, value)
+        addToken(TokenType.STRING, value)
     }
 
     private fun isDigit(c: Char): Boolean = c in '0'..'9'
@@ -218,7 +180,7 @@ class Scanner(
             while (isDigit(peek())) advance()
         }
 
-        addToken(NUMBER, source.substring(start, current).toDouble())
+        addToken(TokenType.NUMBER, source.substring(start, current).toDouble())
     }
 
     private fun peekNext(): Char {
@@ -237,7 +199,7 @@ class Scanner(
         while (isAlphaNumeric(peek())) advance()
 
         val text = source.substring(start, current)
-        val type = keywords[text] ?: IDENTIFIER
+        val type = keywords[text] ?: TokenType.IDENTIFIER
         addToken(type)
     }
 

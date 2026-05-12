@@ -1,5 +1,7 @@
 import io.kotest.core.spec.style.StringSpec
 import io.kotest.matchers.shouldBe
+import lox.Scanner
+import lox.TokenType
 
 class ScannerTest :
     StringSpec({

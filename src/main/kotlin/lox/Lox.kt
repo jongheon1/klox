@@ -1,3 +1,5 @@
+package lox
+
 import java.nio.charset.Charset
 import kotlin.io.path.Path
 import kotlin.io.path.readBytes
@@ -14,8 +16,13 @@ object Lox {
                 exitProcess(64)
             }
 
-            args.size == 1 -> runFile(args[0])
-            else -> runPrompt()
+            args.size == 1 -> {
+                runFile(args[0])
+            }
+
+            else -> {
+                runPrompt()
+            }
         }
     }
 
