@@ -11,28 +11,31 @@ sealed class Expr {
         fun visitUnaryExpr(expr: Unary): R
     }
 
-    class Binary(val left: Expr, val operator: Token, val right: Expr) : Expr() {
-        override fun <R> accept(visitor: Visitor<R>): R {
-            return visitor.visitBinaryExpr(this)
-        }
+    class Binary(
+        val left: Expr,
+        val operator: Token,
+        val right: Expr,
+    ) : Expr() {
+        override fun <R> accept(visitor: Visitor<R>): R = visitor.visitBinaryExpr(this)
     }
 
-    class Grouping(val expression: Expr) : Expr() {
-        override fun <R> accept(visitor: Visitor<R>): R {
-            return visitor.visitGroupingExpr(this)
-        }
+    class Grouping(
+        val expression: Expr,
+    ) : Expr() {
+        override fun <R> accept(visitor: Visitor<R>): R = visitor.visitGroupingExpr(this)
     }
 
-    class Literal(val value: Any?) : Expr() {
-        override fun <R> accept(visitor: Visitor<R>): R {
-            return visitor.visitLiteralExpr(this)
-        }
+    class Literal(
+        val value: Any?,
+    ) : Expr() {
+        override fun <R> accept(visitor: Visitor<R>): R = visitor.visitLiteralExpr(this)
     }
 
-    class Unary(val operator: Token, val right: Expr) : Expr() {
-        override fun <R> accept(visitor: Visitor<R>): R {
-            return visitor.visitUnaryExpr(this)
-        }
+    class Unary(
+        val operator: Token,
+        val right: Expr,
+    ) : Expr() {
+        override fun <R> accept(visitor: Visitor<R>): R = visitor.visitUnaryExpr(this)
     }
 
     abstract fun <R> accept(visitor: Visitor<R>): R

@@ -7,6 +7,9 @@ import kotlin.system.exitProcess
 
 object Lox {
     private var hadError = false
+    private var hadRuntimeError = false
+
+    private val interpreter = Interpreter()
 
     @JvmStatic
     fun main(args: Array<String>) {
@@ -31,6 +34,7 @@ object Lox {
         run(String(bytes, Charset.defaultCharset()))
 
         if (hadError) exitProcess(65)
+        if (hadRuntimeError) exitProcess(70)
     }
 
     private fun runPrompt() {
@@ -47,10 +51,11 @@ object Lox {
     private fun run(source: String) {
         val scanner = Scanner(source)
         val tokens = scanner.scanTokens()
+        val parser = Parser(tokens)
+        val expression = parser.parse()
 
-        for (token in tokens) {
-            println(token)
-        }
+        if (hadError) return
+        interpreter.interpret(expression)
     }
 
     fun error(
@@ -69,6 +74,11 @@ object Lox {
         } else {
             report(token.line, " at '${token.lexeme}'", message)
         }
+    }
+
+    fun runtimeError(error: RuntimeError) {
+        System.err.println("${error.message}\n[line ${error.token.line}]")
+        hadRuntimeError = true
     }
 
     private fun report(

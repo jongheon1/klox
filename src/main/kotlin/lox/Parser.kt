@@ -1,6 +1,33 @@
 package lox
 
-import lox.TokenType.*
+import lox.TokenType.BANG
+import lox.TokenType.BANG_EQUAL
+import lox.TokenType.CLASS
+import lox.TokenType.EOF
+import lox.TokenType.EQUAL_EQUAL
+import lox.TokenType.FALSE
+import lox.TokenType.FOR
+import lox.TokenType.FUN
+import lox.TokenType.GREATER
+import lox.TokenType.GREATER_EQUAL
+import lox.TokenType.IF
+import lox.TokenType.LEFT_PAREN
+import lox.TokenType.LESS
+import lox.TokenType.LESS_EQUAL
+import lox.TokenType.MINUS
+import lox.TokenType.NIL
+import lox.TokenType.NUMBER
+import lox.TokenType.PLUS
+import lox.TokenType.PRINT
+import lox.TokenType.RETURN
+import lox.TokenType.RIGHT_PAREN
+import lox.TokenType.SEMICOLON
+import lox.TokenType.SLASH
+import lox.TokenType.STAR
+import lox.TokenType.STRING
+import lox.TokenType.TRUE
+import lox.TokenType.VAR
+import lox.TokenType.WHILE
 
 class Parser(
     private val tokens: List<Token>,
@@ -11,12 +38,19 @@ class Parser(
 
     private var current = 0
 
+    fun parse(): Expr? =
+        try {
+            expression()
+        } catch (error: ParseError) {
+            null
+        }
+
     private fun expression(): Expr = equality()
 
     private fun equality(): Expr {
         var expr = comparison()
 
-        while (match(BANG_EQUAL, EQUAL)) {
+        while (match(BANG_EQUAL, EQUAL_EQUAL)) {
             val operator = previous()
             val right = comparison()
             expr = Expr.Binary(expr, operator, right)
@@ -96,7 +130,7 @@ class Parser(
             }
 
             else -> {
-                throw error(peek(), "Expect expression")
+                throw error(peek(), "Expect expression.")
             }
         }
 
@@ -140,5 +174,21 @@ class Parser(
     ): ParseError {
         Lox.error(token, message)
         return ParseError()
+    }
+
+    private fun synchronize() {
+        advance()
+
+        while (!isAtEnd()) {
+            if (previous().type == SEMICOLON) return
+            when (peek().type) {
+                CLASS, FUN, VAR, FOR, IF, WHILE, PRINT, RETURN -> {
+                    return
+                }
+
+                else -> { }
+            }
+            advance()
+        }
     }
 }
