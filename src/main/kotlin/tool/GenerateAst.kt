@@ -27,10 +27,23 @@ fun main(args: Array<String>) {
         outputDir,
         "Expr",
         listOf(
+            AstType.of("Assign", "name: Token, value: Expr"),
             AstType.of("Binary", "left: Expr, operator: Token, right: Expr"),
             AstType.of("Grouping", "expression: Expr"),
             AstType.of("Literal", "value: Any?"),
             AstType.of("Unary", "operator: Token, right: Expr"),
+            AstType.of("Variable", "name: Token"),
+        ),
+    )
+
+    defineAst(
+        outputDir,
+        "Stmt",
+        listOf(
+            AstType.of("Block", "statements: List<Stmt>"),
+            AstType.of("Expression", "expression: Expr"),
+            AstType.of("Print", "expression: Expr"),
+            AstType.of("Var", "name: Token, initializer: Expr?"),
         ),
     )
 }

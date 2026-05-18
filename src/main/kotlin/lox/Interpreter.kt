@@ -1,13 +1,30 @@
 package lox
 
-class Interpreter : Expr.Visitor<Any?> {
-    fun interpret(expr: Expr?) {
+class Interpreter :
+    Expr.Visitor<Any?>,
+    Stmt.Visitor<Unit> {
+    private var environment = Environment()
+
+    fun interpret(statements: List<Stmt>) {
         try {
-            val value = evaluate(expr)
-            println(stringify(value))
+            for (statement in statements) {
+                execute(statement)
+            }
         } catch (error: RuntimeError) {
             Lox.runtimeError(error)
         }
+    }
+
+    private fun execute(stmt: Stmt) {
+        stmt.accept(this)
+    }
+
+    private fun evaluate(expr: Expr): Any? = expr.accept(this)
+
+    override fun visitAssignExpr(expr: Expr.Assign): Any? {
+        val value = evaluate(expr.value)
+        environment.assign(expr.name, value)
+        return value
     }
 
     override fun visitBinaryExpr(expr: Expr.Binary): Any? {
@@ -66,9 +83,7 @@ class Interpreter : Expr.Visitor<Any?> {
                 }
             }
 
-            else -> {
-                null
-            }
+            else -> error("Unreachable: unexpected binary operator ${expr.operator.type}")
         }
     }
 
@@ -89,13 +104,49 @@ class Interpreter : Expr.Visitor<Any?> {
                 !isTruthy(right)
             }
 
-            else -> {
-                null
-            }
+            else -> error("Unreachable: unexpected unary operator ${expr.operator.type}")
         }
     }
 
-    private fun evaluate(expr: Expr?): Any? = expr?.accept(this)
+    override fun visitVariableExpr(expr: Expr.Variable): Any? = environment.get(expr.name)
+
+    override fun visitBlockStmt(stmt: Stmt.Block) {
+        executeBlock(stmt.statements, Environment(environment))
+    }
+
+    fun executeBlock(
+        statements: List<Stmt>,
+        environment: Environment,
+    ) {
+        val previous = this.environment
+
+        try {
+            this.environment = environment
+
+            for (statement in statements) {
+                execute(statement)
+            }
+        } finally {
+            this.environment = previous
+        }
+    }
+
+    override fun visitExpressionStmt(stmt: Stmt.Expression) {
+        evaluate(stmt.expression)
+    }
+
+    override fun visitPrintStmt(stmt: Stmt.Print) {
+        val value = evaluate(stmt.expression)
+        println(stringify(value))
+    }
+
+    override fun visitVarStmt(stmt: Stmt.Var) {
+        var value: Any? = null
+        if (stmt.initializer != null) {
+            value = evaluate(stmt.initializer)
+        }
+        environment.define(stmt.name.lexeme, value)
+    }
 
     private fun isTruthy(any: Any?): Boolean =
         when (any) {

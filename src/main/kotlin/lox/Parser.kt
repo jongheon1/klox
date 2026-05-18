@@ -4,13 +4,16 @@ import lox.TokenType.BANG
 import lox.TokenType.BANG_EQUAL
 import lox.TokenType.CLASS
 import lox.TokenType.EOF
+import lox.TokenType.EQUAL
 import lox.TokenType.EQUAL_EQUAL
 import lox.TokenType.FALSE
 import lox.TokenType.FOR
 import lox.TokenType.FUN
 import lox.TokenType.GREATER
 import lox.TokenType.GREATER_EQUAL
+import lox.TokenType.IDENTIFIER
 import lox.TokenType.IF
+import lox.TokenType.LEFT_BRACE
 import lox.TokenType.LEFT_PAREN
 import lox.TokenType.LESS
 import lox.TokenType.LESS_EQUAL
@@ -20,6 +23,7 @@ import lox.TokenType.NUMBER
 import lox.TokenType.PLUS
 import lox.TokenType.PRINT
 import lox.TokenType.RETURN
+import lox.TokenType.RIGHT_BRACE
 import lox.TokenType.RIGHT_PAREN
 import lox.TokenType.SEMICOLON
 import lox.TokenType.SLASH
@@ -38,14 +42,84 @@ class Parser(
 
     private var current = 0
 
-    fun parse(): Expr? =
+    fun parse(): List<Stmt> {
+        val statements = mutableListOf<Stmt>()
+        while (!isAtEnd()) {
+            declaration()?.let { statements.add(it) }
+        }
+        return statements
+    }
+
+    private fun declaration(): Stmt? {
         try {
-            expression()
-        } catch (error: ParseError) {
-            null
+            if (match(VAR)) return varDeclaration()
+            return statement()
+        } catch (_: ParseError) {
+            synchronize()
+            return null
+        }
+    }
+
+    private fun varDeclaration(): Stmt {
+        val name = consume(IDENTIFIER, "Expect variable name.")
+
+        var initializer: Expr? = null
+        if (match(EQUAL)) {
+            initializer = expression()
         }
 
-    private fun expression(): Expr = equality()
+        consume(SEMICOLON, "Expect ';' after variable declaration.")
+        return Stmt.Var(name, initializer)
+    }
+
+    private fun statement(): Stmt {
+        if (match(PRINT)) return printStatement()
+        if (match(LEFT_BRACE)) return block()
+        return expressionStatement()
+    }
+
+    private fun block(): Stmt {
+        val statements = mutableListOf<Stmt>()
+
+        while (!check(RIGHT_BRACE) && !isAtEnd()) {
+            declaration()?.let { statements.add(it) }
+        }
+
+        consume(RIGHT_BRACE, "Expect '}' after block.")
+        return Stmt.Block(statements)
+    }
+
+    private fun printStatement(): Stmt {
+        val value = expression()
+        consume(SEMICOLON, "Expect ';' after value.")
+        return Stmt.Print(value)
+    }
+
+    private fun expressionStatement(): Stmt {
+        val expr = expression()
+        consume(SEMICOLON, "Expect ';' after expression.")
+        return Stmt.Expression(expr)
+    }
+
+    private fun expression(): Expr = assignment()
+
+    private fun assignment(): Expr {
+        val expr = equality()
+
+        if (match(EQUAL)) {
+            val equals = previous()
+            val value = assignment()
+
+            if (expr is Expr.Variable) {
+                val name = expr.name
+                return Expr.Assign(name, value)
+            }
+
+            error(equals, "Invalid assignment target.")
+        }
+
+        return expr
+    }
 
     private fun equality(): Expr {
         var expr = comparison()
@@ -127,6 +201,10 @@ class Parser(
                 val expr = expression()
                 consume(RIGHT_PAREN, "Expect ')' after expression.")
                 Expr.Grouping(expr)
+            }
+
+            match(IDENTIFIER) -> {
+                Expr.Variable(previous())
             }
 
             else -> {
