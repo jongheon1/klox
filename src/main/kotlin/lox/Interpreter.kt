@@ -83,13 +83,26 @@ class Interpreter :
                 }
             }
 
-            else -> error("Unreachable: unexpected binary operator ${expr.operator.type}")
+            else -> {
+                error("Unreachable: unexpected binary operator ${expr.operator.type}")
+            }
         }
     }
 
     override fun visitGroupingExpr(expr: Expr.Grouping): Any? = evaluate(expr.expression)
 
     override fun visitLiteralExpr(expr: Expr.Literal): Any? = expr.value
+
+    override fun visitLogicalExpr(expr: Expr.Logical): Any? {
+        val left = evaluate(expr.left)
+
+        if (expr.operator.type == TokenType.OR) {
+            if (isTruthy(left)) return left
+        } else {
+            if (!isTruthy(left)) return left
+        }
+        return evaluate(expr.right)
+    }
 
     override fun visitUnaryExpr(expr: Expr.Unary): Any? {
         val right = evaluate(expr.right)
@@ -104,7 +117,9 @@ class Interpreter :
                 !isTruthy(right)
             }
 
-            else -> error("Unreachable: unexpected unary operator ${expr.operator.type}")
+            else -> {
+                error("Unreachable: unexpected unary operator ${expr.operator.type}")
+            }
         }
     }
 
@@ -135,16 +150,27 @@ class Interpreter :
         evaluate(stmt.expression)
     }
 
+    override fun visitIfStmt(stmt: Stmt.If) {
+        if (isTruthy(evaluate(stmt.condition))) {
+            execute(stmt.thenBranch)
+        } else if (stmt.elseBranch != null) {
+            execute(stmt.elseBranch)
+        }
+    }
+
+    override fun visitWhileStmt(stmt: Stmt.While) {
+        while (isTruthy(evaluate(stmt.condition))) {
+            execute(stmt.body)
+        }
+    }
+
     override fun visitPrintStmt(stmt: Stmt.Print) {
         val value = evaluate(stmt.expression)
         println(stringify(value))
     }
 
     override fun visitVarStmt(stmt: Stmt.Var) {
-        var value: Any? = null
-        if (stmt.initializer != null) {
-            value = evaluate(stmt.initializer)
-        }
+        val value = stmt.initializer?.let { evaluate(it) }
         environment.define(stmt.name.lexeme, value)
     }
 
@@ -158,11 +184,7 @@ class Interpreter :
     private fun isEqual(
         a: Any?,
         b: Any?,
-    ): Boolean {
-        if (a == null && b == null) return true
-        if (a == null) return false
-        return a == b
-    }
+    ): Boolean = a == b
 
     private fun checkNumberOperand(
         operator: Token,
@@ -181,15 +203,10 @@ class Interpreter :
         throw RuntimeError(operator, "Operands must be numbers.")
     }
 
-    private fun stringify(any: Any?): String {
-        if (any == null) return "nil"
-        if (any is Double) {
-            var text = any.toString()
-            if (text.endsWith(".0")) {
-                text = text.dropLast(2)
-            }
-            return text
+    private fun stringify(any: Any?): String =
+        when (any) {
+            null -> "nil"
+            is Double -> any.toString().removeSuffix(".0")
+            else -> any.toString()
         }
-        return any.toString()
-    }
 }

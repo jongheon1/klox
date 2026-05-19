@@ -1,8 +1,10 @@
 package lox
 
+import lox.TokenType.AND
 import lox.TokenType.BANG
 import lox.TokenType.BANG_EQUAL
 import lox.TokenType.CLASS
+import lox.TokenType.ELSE
 import lox.TokenType.EOF
 import lox.TokenType.EQUAL
 import lox.TokenType.EQUAL_EQUAL
@@ -20,6 +22,7 @@ import lox.TokenType.LESS_EQUAL
 import lox.TokenType.MINUS
 import lox.TokenType.NIL
 import lox.TokenType.NUMBER
+import lox.TokenType.OR
 import lox.TokenType.PLUS
 import lox.TokenType.PRINT
 import lox.TokenType.RETURN
@@ -73,9 +76,80 @@ class Parser(
     }
 
     private fun statement(): Stmt {
+        if (match(FOR)) return forStatement()
+        if (match(IF)) return ifStatement()
         if (match(PRINT)) return printStatement()
+        if (match(WHILE)) return whileStatement()
         if (match(LEFT_BRACE)) return block()
         return expressionStatement()
+    }
+
+    private fun forStatement(): Stmt {
+        consume(LEFT_PAREN, "Expect '(' after 'for'.")
+        val initializer =
+            if (match(SEMICOLON)) {
+                null
+            } else if (match(VAR)) {
+                varDeclaration()
+            } else {
+                expressionStatement()
+            }
+
+        val condition =
+            if (!check(SEMICOLON)) {
+                expression()
+            } else {
+                Expr.Literal(true)
+            }
+
+        consume(SEMICOLON, "Expect ';' after loop condition.")
+
+        val increment =
+            if (!check(RIGHT_PAREN)) {
+                expression()
+            } else {
+                null
+            }
+        consume(RIGHT_PAREN, "Expect ')' after for clauses.")
+
+        var body = statement()
+
+        if (increment != null) {
+            body = Stmt.Block(listOf(body, Stmt.Expression(increment)))
+        }
+
+        body = Stmt.While(condition, body)
+
+        if (initializer != null) {
+            body = Stmt.Block(listOf(initializer, body))
+        }
+
+        return body
+    }
+
+    private fun ifStatement(): Stmt {
+        consume(LEFT_PAREN, "Expect '(' after 'if'.")
+        val condition = expression()
+        consume(RIGHT_PAREN, "Expect ')' after if condition.")
+
+        val thenBranch = statement()
+        val elseBranch =
+            if (match(ELSE)) {
+                statement()
+            } else {
+                null
+            }
+
+        return Stmt.If(condition, thenBranch, elseBranch)
+    }
+
+    private fun whileStatement(): Stmt {
+        consume(LEFT_PAREN, "Expect '(' after 'while'.")
+        val condition = expression()
+        consume(RIGHT_PAREN, "Expect ')' after condition.")
+
+        val body = statement()
+        return Stmt.While(condition, body)
     }
 
     private fun block(): Stmt {
@@ -104,7 +178,7 @@ class Parser(
     private fun expression(): Expr = assignment()
 
     private fun assignment(): Expr {
-        val expr = equality()
+        val expr = or()
 
         if (match(EQUAL)) {
             val equals = previous()
@@ -116,6 +190,30 @@ class Parser(
             }
 
             error(equals, "Invalid assignment target.")
+        }
+
+        return expr
+    }
+
+    private fun or(): Expr {
+        var expr = and()
+
+        while (match(OR)) {
+            val operator = previous()
+            val right = and()
+            expr = Expr.Logical(expr, operator, right)
+        }
+
+        return expr
+    }
+
+    private fun and(): Expr {
+        var expr = equality()
+
+        while (match(AND)) {
+            val operator = previous()
+            val right = equality()
+            expr = Expr.Logical(expr, operator, right)
         }
 
         return expr
@@ -264,7 +362,7 @@ class Parser(
                     return
                 }
 
-                else -> { }
+                else -> {}
             }
             advance()
         }
