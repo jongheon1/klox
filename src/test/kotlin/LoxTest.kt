@@ -6,6 +6,6 @@ class LoxTest :
         "execute lox" {
             val lox = Lox
 
-            lox.main(arrayOf("./forloop.lox"))
+            lox.main(arrayOf("./test.lox"))
         }
     })

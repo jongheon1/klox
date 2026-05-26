@@ -29,6 +29,7 @@ fun main(args: Array<String>) {
         listOf(
             AstType.of("Assign", "name: Token, value: Expr"),
             AstType.of("Binary", "left: Expr, operator: Token, right: Expr"),
+            AstType.of("Call", "callee: Expr, paren: Token, arguments: List<Expr>"),
             AstType.of("Grouping", "expression: Expr"),
             AstType.of("Literal", "value: Any?"),
             AstType.of("Logical", "left: Expr, operator: Token, right: Expr"),
@@ -43,8 +44,10 @@ fun main(args: Array<String>) {
         listOf(
             AstType.of("Block", "statements: List<Stmt>"),
             AstType.of("Expression", "expression: Expr"),
+            AstType.of("Function", "name: Token, params: List<Token>, body: List<Stmt>"),
             AstType.of("If", "condition: Expr, thenBranch: Stmt, elseBranch: Stmt?"),
             AstType.of("Print", "expression: Expr"),
+            AstType.of("Return", "keyword: Token, value: Expr?"),
             AstType.of("Var", "name: Token, initializer: Expr?"),
             AstType.of("While", "condition: Expr, body: Stmt"),
         ),

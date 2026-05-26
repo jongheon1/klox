@@ -3,7 +3,23 @@ package lox
 class Interpreter :
     Expr.Visitor<Any?>,
     Stmt.Visitor<Unit> {
-    private var environment = Environment()
+    val globals =
+        Environment().apply {
+            define(
+                "clock",
+                object : LoxCallable {
+                    override fun arity(): Int = 0
+
+                    override fun call(
+                        interpreter: Interpreter,
+                        arguments: List<Any?>,
+                    ): Any = System.currentTimeMillis() / 1000.0
+
+                    override fun toString(): String = "<native fn>"
+                },
+            )
+        }
+    private var environment = globals
 
     fun interpret(statements: List<Stmt>) {
         try {
@@ -89,6 +105,18 @@ class Interpreter :
         }
     }
 
+    override fun visitCallExpr(expr: Expr.Call): Any? {
+        val callee = evaluate(expr.callee)
+        val arguments = expr.arguments.map { evaluate(it) }
+        if (callee !is LoxCallable) {
+            throw RuntimeError(expr.paren, "Can only call functions and classes.")
+        }
+        if (arguments.size != callee.arity()) {
+            throw RuntimeError(expr.paren, "Expected ${callee.arity()} arguments but got ${arguments.size}.")
+        }
+        return callee.call(this, arguments)
+    }
+
     override fun visitGroupingExpr(expr: Expr.Grouping): Any? = evaluate(expr.expression)
 
     override fun visitLiteralExpr(expr: Expr.Literal): Any? = expr.value
@@ -150,6 +178,11 @@ class Interpreter :
         evaluate(stmt.expression)
     }
 
+    override fun visitFunctionStmt(stmt: Stmt.Function) {
+        val function = LoxFunction(stmt, environment)
+        environment.define(stmt.name.lexeme, function)
+    }
+
     override fun visitIfStmt(stmt: Stmt.If) {
         if (isTruthy(evaluate(stmt.condition))) {
             execute(stmt.thenBranch)
@@ -167,6 +200,11 @@ class Interpreter :
     override fun visitPrintStmt(stmt: Stmt.Print) {
         val value = evaluate(stmt.expression)
         println(stringify(value))
+    }
+
+    override fun visitReturnStmt(stmt: Stmt.Return) {
+        val value = stmt.value?.let { evaluate(it) }
+        throw Return(value)
     }
 
     override fun visitVarStmt(stmt: Stmt.Var) {
