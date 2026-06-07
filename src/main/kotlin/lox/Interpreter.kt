@@ -83,7 +83,11 @@ class Interpreter :
 
             TokenType.SLASH -> {
                 checkNumberOperands(expr.operator, left, right)
-                left as Double / right as Double
+                val divisor = right as Double
+                if (divisor == 0.0) {
+                    throw RuntimeError(expr.operator, "Division by zero.")
+                }
+                left as Double / divisor
             }
 
             TokenType.STAR -> {
@@ -95,6 +99,7 @@ class Interpreter :
                 when {
                     left is Double && right is Double -> left + right
                     left is String && right is String -> left + right
+                    left is String || right is String -> stringify(left) + stringify(right)
                     else -> throw RuntimeError(expr.operator, "Operands must be two numbers or two strings.")
                 }
             }
