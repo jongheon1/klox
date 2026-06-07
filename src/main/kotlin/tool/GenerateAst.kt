@@ -35,6 +35,7 @@ fun main(args: Array<String>) {
             AstType.of("Logical", "left: Expr, operator: Token, right: Expr"),
             AstType.of("Unary", "operator: Token, right: Expr"),
             AstType.of("Variable", "name: Token"),
+            AstType.of("Ternary", "condition: Expr, thenExpr: Expr, elseExpr: Expr")
         ),
     )
 

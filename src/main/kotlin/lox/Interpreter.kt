@@ -151,6 +151,16 @@ class Interpreter :
         }
     }
 
+    override fun visitTernaryExpr(expr: Expr.Ternary): Any? {
+        val condition = evaluate(expr.condition)
+
+        return if (isTruthy(condition)) {
+            evaluate(expr.thenExpr)
+        } else {
+            evaluate(expr.elseExpr)
+        }
+    }
+
     override fun visitVariableExpr(expr: Expr.Variable): Any? = environment.get(expr.name)
 
     override fun visitBlockStmt(stmt: Stmt.Block) {

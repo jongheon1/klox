@@ -111,6 +111,14 @@ class Scanner(
                 }
             }
 
+            '?' -> {
+                addToken(TokenType.QUESTION)
+            }
+
+            ':' -> {
+                addToken(TokenType.COLON)
+            }
+
             ' ', '\r', '\t' -> { }
 
             '\n' -> {

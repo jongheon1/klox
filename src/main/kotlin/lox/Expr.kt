@@ -3,20 +3,14 @@ package lox
 sealed class Expr {
     interface Visitor<R> {
         fun visitAssignExpr(expr: Assign): R
-
         fun visitBinaryExpr(expr: Binary): R
-
         fun visitCallExpr(expr: Call): R
-
         fun visitGroupingExpr(expr: Grouping): R
-
         fun visitLiteralExpr(expr: Literal): R
-
         fun visitLogicalExpr(expr: Logical): R
-
         fun visitUnaryExpr(expr: Unary): R
-
         fun visitVariableExpr(expr: Variable): R
+        fun visitTernaryExpr(expr: Ternary): R
     }
 
     class Assign(val name: Token, val value: Expr) : Expr() {
@@ -64,6 +58,12 @@ sealed class Expr {
     class Variable(val name: Token) : Expr() {
         override fun <R> accept(visitor: Visitor<R>): R {
             return visitor.visitVariableExpr(this)
+        }
+    }
+
+    class Ternary(val condition: Expr, val thenExpr: Expr, val elseExpr: Expr) : Expr() {
+        override fun <R> accept(visitor: Visitor<R>): R {
+            return visitor.visitTernaryExpr(this)
         }
     }
 
