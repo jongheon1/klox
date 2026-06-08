@@ -55,6 +55,10 @@ object Lox {
         val statements = parser.parse()
 
         if (hadError) return
+        val resolver = Resolver(interpreter)
+        resolver.resolve(statements)
+
+        if (hadError) return
         interpreter.interpret(statements)
     }
 

@@ -20,6 +20,7 @@ class Interpreter :
             )
         }
     private var environment = globals
+    private val locals: MutableMap<Expr, Int> = mutableMapOf()
 
     fun interpret(statements: List<Stmt>) {
         try {
@@ -35,11 +36,22 @@ class Interpreter :
         stmt.accept(this)
     }
 
+    fun resolve(expr: Expr, depth: Int) {
+        locals[expr] = depth
+    }
+
     private fun evaluate(expr: Expr): Any? = expr.accept(this)
 
     override fun visitAssignExpr(expr: Expr.Assign): Any? {
         val value = evaluate(expr.value)
-        environment.assign(expr.name, value)
+
+        val distance = locals[expr]
+        if (distance != null) {
+            environment.assignAt(distance, expr.name, value)
+        } else {
+            globals.assign(expr.name, value)
+        }
+
         return value
     }
 
@@ -166,7 +178,16 @@ class Interpreter :
         }
     }
 
-    override fun visitVariableExpr(expr: Expr.Variable): Any? = environment.get(expr.name)
+    override fun visitVariableExpr(expr: Expr.Variable): Any? = lookUpVariable(expr.name, expr)
+
+    private fun lookUpVariable(name: Token, expr: Expr): Any? {
+        val distance = locals[expr]
+        return if (distance != null) {
+            environment.getAt(distance, name.lexeme)
+        } else {
+            globals.get(name)
+        }
+    }
 
     override fun visitBlockStmt(stmt: Stmt.Block) {
         executeBlock(stmt.statements, Environment(environment))

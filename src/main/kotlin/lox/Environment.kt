@@ -12,6 +12,27 @@ class Environment(
         values[name] = value
     }
 
+    fun ancestor(distance: Int): Environment {
+        var environment = this
+        for (i in 0 until distance) {
+            environment = environment.enclosing!!
+        }
+        return environment
+    }
+
+    fun getAt(
+        distance: Int,
+        name: String
+    ): Any? = ancestor(distance).values[name]
+
+    fun assignAt(
+        distance: Int,
+        name: Token,
+        value: Any?
+    ) {
+        ancestor(distance).values[name.lexeme] = value
+    }
+
     fun get(name: Token): Any? {
         if (values.containsKey(name.lexeme)) {
             return values[name.lexeme]
