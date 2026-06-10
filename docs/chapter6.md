@@ -9,14 +9,23 @@
 
 ### 모호함(Ambiguity) 문제
 
-5장에서 정의한 문법은 사실 **모호**했다:
+5장에서 정의한 문법은 다음과 같았다(전체):
 
 ```
-expression → literal | unary | binary | grouping ;
+expression → literal
+           | unary
+           | binary
+           | grouping ;
+
+literal    → NUMBER | STRING | "true" | "false" | "nil" ;
+grouping   → "(" expression ")" ;
+unary      → ( "-" | "!" ) expression ;
 binary     → expression operator expression ;
+operator   → "==" | "!=" | "<" | "<=" | ">" | ">="
+           | "+"  | "-"  | "*"  | "/" ;
 ```
 
-`6 / 3 - 1`을 이 문법으로 파싱하면 **서로 다른 두 트리**가 모두 가능하다:
+그런데 이 문법은 사실 **모호**하다. `6 / 3 - 1`을 이 문법으로 파싱하면 **서로 다른 두 트리**가 모두 가능하다:
 
 - `(6 / 3) - 1` = 1
 - `6 / (3 - 1)` = 3
@@ -32,13 +41,13 @@ binary     → expression operator expression ;
 
 ### Lox 우선순위 표 (C와 동일, 낮은 것 → 높은 것)
 
-| 이름 | 연산자 | 결합 |
-|---|---|---|
-| Equality | `==` `!=` | 좌 |
-| Comparison | `>` `>=` `<` `<=` | 좌 |
-| Term | `-` `+` | 좌 |
-| Factor | `/` `*` | 좌 |
-| Unary | `!` `-` | 우 |
+| 이름         | 연산자               | 결합 |
+|------------|-------------------|----|
+| Equality   | `==` `!=`         | 좌  |
+| Comparison | `>` `>=` `<` `<=` | 좌  |
+| Term       | `-` `+`           | 좌  |
+| Factor     | `/` `*`           | 좌  |
+| Unary      | `!` `-`           | 우  |
 
 ### 해법: 우선순위별로 문법을 계층화
 
@@ -60,6 +69,44 @@ primary    → NUMBER | STRING | "true" | "false" | "nil"
 - `( ... )*` 반복 패턴이 같은 단계 연산자를 좌결합 시퀀스로 묶는다.
 - 이 문법은 더 이상 모호하지 않다. 각 입력에 대해 트리가 유일하게 결정된다.
 
+### 직접 따라가 보기 — 계층 문법이 우선순위를 강제한다
+
+옛 문법에서 모호했던 `6 / 3 - 1`을 새 문법으로 위에서부터 유도해 보자. 규칙 이름을 따라 한 단계씩 내려간다.
+
+```
+expression
+└─ equality        (==, != 없음 → 통과)
+   └─ comparison   (>, < 없음 → 통과)
+      └─ term      여기서 멈춘다. term은 "-" "+" 를 담당한다.
+```
+
+`term`은 자기 일을 하기 전에 먼저 `factor`를 부른다. 그리고 `factor`가 `6 / 3`을 통째로 집어삼킨다:
+
+```
+term → factor( ... )
+       factor → unary("6")  "/"  unary("3")     ⇒  (6 / 3)
+       factor는 "/" "*" 만 담당하므로, 다음 토큰 "-" 를 보면
+       멈추고 (6 / 3) 트리를 term에게 돌려준다.
+```
+
+이제야 `term`이 자기 차례의 `-`를 본다:
+
+```
+term → (6 / 3)  "-"  factor("1")                ⇒  ((6 / 3) - 1)
+```
+
+최종 트리는 단 하나다:
+
+```
+      ( - )
+      /   \
+   ( / )    1
+   /   \
+  6     3
+```
+
+`/`가 `-`보다 **문법상 더 깊은 곳(`factor`)**에 있기 때문에 파서가 구조적으로 먼저 묶을 수밖에 없다. 우선순위가 문법 계층으로 못박힌 것이다 — 옛 문법처럼 `6 / (3 - 1)`이 나올 길은 애초에 없다.
+
 ---
 
 ## 6.2 재귀 하향 파싱 (Recursive Descent)
@@ -67,22 +114,22 @@ primary    → NUMBER | STRING | "true" | "false" | "nil"
 - **하향식(top-down)**: 최상위 규칙(`expression`)에서 출발해 트리의 잎으로 내려간다.
 - 핵심 아이디어: **문법 규칙을 코드로 직역**한다.
 
-| 문법 표기 | 코드 |
-|---|---|
-| 터미널 | 토큰 매칭/소비 |
-| 논터미널 | 그 규칙의 함수 호출 |
-| `\|` | `if` / `switch` |
+| 문법 표기   | 코드                 |
+|---------|--------------------|
+| 터미널     | 토큰 매칭/소비           |
+| 논터미널    | 그 규칙의 함수 호출        |
+| `\|`    | `if` / `switch`    |
 | `*` `+` | `while` / `for` 루프 |
-| `?` | `if` |
+| `?`     | `if`               |
 
 ### 파서 클래스 구조 — 스캐너와 판박이
 
-| | 스캐너 (3장) | 파서 (6장) |
-|---|---|---|
-| 입력 | 문자(char) 나열 | 토큰 나열 |
-| 위치 추적 | `current` (문자 인덱스) | `current` (토큰 인덱스) |
-| 헬퍼 | `advance` `peek` `match` | `advance` `peek` `match` `check` `consume` |
-| 출력 | 토큰 리스트 | AST |
+|       | 스캐너 (3장)                 | 파서 (6장)                                    |
+|-------|--------------------------|--------------------------------------------|
+| 입력    | 문자(char) 나열              | 토큰 나열                                      |
+| 위치 추적 | `current` (문자 인덱스)       | `current` (토큰 인덱스)                         |
+| 헬퍼    | `advance` `peek` `match` | `advance` `peek` `match` `check` `consume` |
+| 출력    | 토큰 리스트                   | AST                                        |
 
 ```java
 class Parser {
@@ -130,8 +177,6 @@ private Token previous() {
   return tokens.get(current - 1);
 }
 ```
-
-`match`는 현재 토큰이 주어진 종류 중 하나면 **소비하고 true**, 아니면 위치를 그대로 둔 채 false를 돌려준다. `check`는 소비 없이 종류만 확인한다. 이 구분이 루프 조건과 분기를 만든다.
 
 ### 핵심 코드 패턴 — `equality()`
 
@@ -230,6 +275,68 @@ private Expr primary() {
 
 괄호 안에서 다시 최상위 `expression()`을 호출하는 데 주목하라. 이 재귀가 우선순위 계단을 한 바퀴 다시 돌게 해준다.
 
+### 종합 예시 — 토큰 배열이 함수 호출을 거쳐 Expr 객체가 되기까지
+
+입력 `-1 + 2 * 3`을 보자. 스캐너가 만든 토큰 배열은 다음과 같다:
+
+```
+[ MINUS, NUMBER(1), PLUS, NUMBER(2), STAR, NUMBER(3), EOF ]
+```
+
+이 배열을 파서에 넣으면, 규칙 함수들이 서로를 호출하며 콜스택을 쌓아 내려갔다가 트리를 들고 올라온다. 들여쓰기가 콜스택 깊이다:
+
+```
+expression()
+└ equality()                      → comparison() 호출 결과를 그대로 반환
+  └ comparison()                  → term() 호출 결과를 그대로 반환
+    └ term()
+      ├ factor()                  ← 왼쪽 피연산자
+      │ └ unary()  match(MINUS)!  연산자 '-' 소비
+      │   └ unary()
+      │     └ primary()  NUMBER(1) 소비 → Literal(1)
+      │   ⇒ Unary(-, Literal(1))
+      │ factor: 다음 토큰이 PLUS라 "/ *" 아님 → 그대로 반환
+      │
+      │ term: match(PLUS)!  연산자 '+' 소비, 오른쪽 피연산자로 factor() 호출
+      │
+      └ factor()                  ← 오른쪽 피연산자
+        ├ unary() → primary()  NUMBER(2) → Literal(2)
+        │ factor: match(STAR)!  '*' 소비, 오른쪽으로 unary() 호출
+        └ unary() → primary()  NUMBER(3) → Literal(3)
+        ⇒ Binary(Literal(2), *, Literal(3))
+      │
+      term: 다음 토큰이 EOF → 루프 종료
+      ⇒ Binary( Unary(-, Literal(1)), +, Binary(Literal(2), *, Literal(3)) )
+```
+
+핵심은 **`*`가 `factor`(깊은 단계)에서, `+`가 `term`(얕은 단계)에서 처리**된다는 점이다. 그래서 `term`이 `+`의 오른쪽을 `factor()`로 받는 순간 `2 * 3`이 먼저 한 덩어리로 묶인다.
+
+`parse()`가 최종적으로 돌려주는 Expr 객체는 이런 중첩 구조다:
+
+```java
+new Expr.Binary(
+    new Expr.Unary(
+        MINUS,
+        new Expr.Literal(1.0)),
+    PLUS,
+    new Expr.Binary(
+        new Expr.Literal(2.0),
+        STAR,
+        new Expr.Literal(3.0)))
+```
+
+트리로 그리면:
+
+```
+        ( + )
+       /     \
+   ( - )     ( * )
+     |       /   \
+     1      2     3
+```
+
+토큰 배열(평평한 1차원)이 문법 규칙을 거치며 **우선순위가 반영된 중첩 트리**로 바뀐 것이다. 이 트리가 7장에서 평가의 입력이 된다.
+
 ---
 
 ## 6.3 구문 에러
@@ -254,8 +361,6 @@ private ParseError error(Token token, String message) {
   return new ParseError();
 }
 ```
-
-`error`는 `ParseError`를 **반환**하지만, 던질지는 호출하는 쪽이 정한다. 이 유연함이 에러 복구의 핵심이다.
 
 ### 패닉 모드와 동기화
 

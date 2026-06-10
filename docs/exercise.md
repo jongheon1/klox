@@ -23,13 +23,30 @@ primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
 
 > C에서 블록이 하나의 문장 자리에 여러 문장을 넣게 해주듯, 콤마 연산자는 하나의 표현식 자리에 콤마로 구분된 여러 표현식을 넣게 해준다(함수 호출 인자 목록 안은 제외). 런타임에 왼쪽 피연산자를 평가해 버리고, 오른쪽 피연산자를 평가해 반환한다. C와 같은 우선순위·결합성으로 콤마 표현식을 지원하라.
 
+### 콤마 연산자 예시
+
+```
+1 + 2, 3 * 4     →  (1 + 2)를 평가해 버리고, (3 * 4) = 12 를 반환
+"a", "b", "c"    →  앞의 둘을 버리고 "c" 를 반환
+1, 2, 3          →  좌결합 ((1, 2), 3) → 최종 3
+(1 + 2, 3) * 4   →  괄호 안 콤마는 3으로 평가 → 3 * 4 = 12
+```
+
+가장 바깥 자리에서 콤마는 "여러 표현식을 줄지어 평가하고 마지막 것만 값으로 쓴다".
+
 ### 풀이
 
-콤마는 **가장 낮은 우선순위**이고 **좌결합**이다(C와 동일). 따라서 문법 최상위에 새 규칙을 끼우고 `expression`이 그것을 가리키게 한다.
+콤마는 **가장 낮은 우선순위**이고 **좌결합**이다(C와 동일). 따라서 문법 최상위에 새 규칙을 끼우고 `expression`이 그것을 가리키게 한다. 6장 전체 문법에 한 줄(`comma`)이 추가되고 `expression`의 목적지가 바뀐 모습은 다음과 같다:
 
 ```
 expression → comma ;
-comma      → equality ( "," equality )* ;
+comma      → equality ( "," equality )* ;          ← 새로 추가
+equality   → comparison ( ( "!=" | "==" ) comparison )* ;
+comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+term       → factor ( ( "-" | "+" ) factor )* ;
+factor     → unary ( ( "/" | "*" ) unary )* ;
+unary      → ( "!" | "-" ) unary | primary ;
+primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
 ```
 
 `( "," equality )*` 반복이 좌결합 시퀀스를 만든다. 구조가 `왼쪽 , 오른쪽`이므로 새 AST 노드 없이 기존 `Expr.Binary`를 재사용할 수 있다.
@@ -52,11 +69,23 @@ private Expr comma() {
 }
 ```
 
-런타임(7장에서 채워지는 부분)은 이항 평가에 분기 하나만 추가한다. 양쪽이 이미 평가된 뒤이므로, 왼쪽은 부수 효과만 남기고 버리고 오른쪽을 반환한다.
+런타임(7장에서 채워지는 부분)은 이항 평가 함수에 분기 하나만 추가한다. `visitBinaryExpr`는 이미 양쪽을 먼저 평가하므로, 콤마는 왼쪽 값을 그냥 쓰지 않고 오른쪽을 반환하면 된다(왼쪽의 부수 효과는 이미 일어났다):
 
 ```java
-case COMMA:
-  return right;
+public Object visitBinaryExpr(Expr.Binary expr) {
+  Object left  = evaluate(expr.left);    // 왼쪽 먼저 평가 (부수 효과 발생)
+  Object right = evaluate(expr.right);   // 오른쪽 평가
+
+  switch (expr.operator.type) {
+    // ... 기존 산술·비교 연산자 분기들 ...
+    case PLUS:  return (double)left + (double)right;
+    case STAR:  return (double)left * (double)right;
+
+    case COMMA:          // 새로 추가
+      return right;      // left는 버리고 right 반환
+  }
+  return null;
+}
 ```
 
 ### 함수 인자 목록 예외
@@ -76,6 +105,15 @@ do {
 
 > C 스타일의 조건 연산자 `?:`를 추가하라. `?`와 `:` 사이에는 어떤 우선순위가 허용되는가? 연산자 전체는 좌결합인가 우결합인가?
 
+### 삼항 연산자 예시
+
+```
+true ? "yes" : "no"      →  "yes"
+1 < 2 ? "작다" : "크다"     →  "작다"   (비교가 ? 보다 먼저 묶인다)
+1 ? 2 : 3 ? 4 : 5        →  우결합 1 ? 2 : (3 ? 4 : 5) → 2
+true ? 1 + 1 : 9         →  가운데엔 어떤 표현식이든 올 수 있다 → 2
+```
+
 ### 두 질문에 대한 답
 
 - **`?`와 `:` 사이**: 어떤 표현식이든 올 수 있다. 마치 양쪽이 괄호로 묶인 것처럼 취급하므로, 가장 낮은 우선순위(`expression` 전체)까지 허용된다.
@@ -83,12 +121,18 @@ do {
 
 ### 풀이
 
-콤마와 equality 사이에 `conditional` 단계를 넣는다.
+콤마와 equality 사이에 `conditional` 단계를 끼운다. 6-1에서 만든 문법에 한 단계가 더 들어간 전체 모습은 다음과 같다:
 
 ```
 expression  → comma ;
-comma       → conditional ( "," conditional )* ;
-conditional → equality ( "?" expression ":" conditional )? ;
+comma       → conditional ( "," conditional )* ;          ← comma의 목적지가 conditional로 바뀜
+conditional → equality ( "?" expression ":" conditional )? ;   ← 새로 추가
+equality    → comparison ( ( "!=" | "==" ) comparison )* ;
+comparison  → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+term        → factor ( ( "-" | "+" ) factor )* ;
+factor      → unary ( ( "/" | "*" ) unary )* ;
+unary       → ( "!" | "-" ) unary | primary ;
+primary     → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
 ```
 
 - 가운데 피연산자는 `expression`(전체 우선순위) — 첫 번째 질문의 답.
@@ -135,6 +179,18 @@ public Object visitConditionalExpr(Expr.Conditional expr) {
 ## 6-3. 이항 연산자의 왼쪽 피연산자 누락 에러 처리
 
 > 각 이항 연산자가 왼쪽 피연산자 없이 등장하는 경우를 다루는 **에러 프로덕션(error production)**을 추가하라. 즉, 표현식 맨 앞에 이항 연산자가 오는 것을 감지해 에러로 보고하되, 오른쪽 피연산자는 적절한 우선순위로 파싱한 뒤 버려라.
+
+### 잡아내려는 입력 예시
+
+```
+<= 5      →  "Missing left-hand operand."   (<= 앞에 피연산자가 없음)
+* 3       →  "Missing left-hand operand."   ("/" "*" 도 동일)
++ 4       →  "Missing left-hand operand."   ("+" 는 단항이 없으므로 항상 에러)
+== 2      →  "Missing left-hand operand."
+- 4       →  에러 아님!  "-" 는 단항 부정이 되어 -4 로 정상 파싱
+```
+
+마지막 줄이 핵심이다. `-`만은 단항 연산자로도 유효하므로 에러 프로덕션에서 제외한다.
 
 ### 풀이
 
