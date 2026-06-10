@@ -116,6 +116,10 @@ class Interpreter :
                 }
             }
 
+            TokenType.COMMA -> {
+                right
+            }
+
             else -> {
                 error("Unreachable: unexpected binary operator ${expr.operator.type}")
             }

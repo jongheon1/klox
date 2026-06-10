@@ -211,7 +211,19 @@ class Parser(
         return Stmt.Expression(expr)
     }
 
-    private fun expression(): Expr = assignment()
+    private fun expression(): Expr = comma()
+
+    private fun comma(): Expr {
+        var expr = assignment()
+
+        while (match(TokenType.COMMA)) {
+            val operator = previous()
+            val right = assignment()
+            expr = Expr.Binary(expr, operator, right)
+        }
+
+        return expr
+    }
 
     private fun assignment(): Expr {
         val expr = ternary()
@@ -348,7 +360,7 @@ class Parser(
                 if (arguments.size >= 255) {
                     error(peek(), "Can't have more than 255 arguments.")
                 }
-                arguments.add(expression())
+                arguments.add(assignment())
             } while (match(TokenType.COMMA))
         }
 
