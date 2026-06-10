@@ -1,64 +1,38 @@
-# 챕터 6 챌린지 — 콤마 연산자 (Comma Operator)
+# 연습문제 풀이 — 6장 & 7장
 
-> *Crafting Interpreters* 6장 "Parsing Expressions"의 챌린지 1번 풀이.
-> 책 6장까지의 코드(표현식 파서)를 기준으로 설명하고, 마지막에 이 저장소(klox)의 실제 구현으로 연결한다.
+*Crafting Interpreters*의 6장(Parsing Expressions)과 7장(Evaluating Expressions) 끝에 있는 챌린지 풀이.
+모든 코드는 책의 jlox(Java) 기준이며, 각 장 진도까지의 코드 상태를 전제로 한다.
 
-## 문제
+---
 
-> C에서 블록(block)은 하나의 문장이 필요한 자리에 여러 문장을 묶어 넣을 수 있게 해주는 문장 형태다. **콤마 연산자**는 표현식에 대한 그 유사물이다. 하나의 표현식이 기대되는 자리에(단, 함수 호출의 인자 목록 안은 제외) 콤마로 구분된 일련의 표현식을 넣을 수 있다.
-> 런타임에 콤마 연산자는 **왼쪽 피연산자를 평가하고 그 결과를 버린다. 그런 다음 오른쪽 피연산자를 평가해 반환한다.**
+# 6장 챌린지
 
-예시 (이 저장소 기준):
-
-```
-$ cat program.lox
-var a; var b; var c;
-a = 1, b = 2, c = 3;
-print a;
-print b;
-print c;
-$ klox program.lox
-1
-2
-3
-```
-
-`a = 1, b = 2, c = 3` 한 줄이 세 개의 할당을 차례로 수행하고, 표현식 전체의 값은 마지막 `c = 3`인 `3`이 된다(여기서는 버려진다).
-
-## 핵심 개념 세 가지
-
-1. **콤마는 이항 연산자처럼 동작한다.** `왼쪽 , 오른쪽` 구조이고, 다른 연산자들과 똑같이 우선순위(precedence)와 결합성(associativity)을 가진다.
-2. **우선순위는 가장 낮다.** `1 + 2, 3 * 4`는 `(1 + 2) , (3 * 4)`로 묶여야 한다. 즉 콤마는 다른 모든 연산자보다 **늦게** 묶인다 → 문법에서 가장 바깥(가장 위) 규칙이 된다.
-3. **결합성은 왼쪽(left-associative)이다.** `a, b, c`는 `(a, b), c`. C의 정의와 일치하며, 어차피 왼쪽 값들은 버려지므로 평가 순서(왼→오)만 지켜지면 결과는 같다.
-
-## 문법 (책 6장 기준)
-
-6장 끝 시점의 표현식 문법은 다음과 같다:
+6장 끝의 표현식 문법은 다음과 같다(풀이의 출발점):
 
 ```
-expression  → equality ;
-equality    → comparison ( ( "!=" | "==" ) comparison )* ;
-comparison  → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-term        → factor ( ( "-" | "+" ) factor )* ;
-factor      → unary ( ( "/" | "*" ) unary )* ;
-unary       → ( "!" | "-" ) unary | primary ;
-primary     → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+expression → equality ;
+equality   → comparison ( ( "!=" | "==" ) comparison )* ;
+comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+term       → factor ( ( "-" | "+" ) factor )* ;
+factor     → unary ( ( "/" | "*" ) unary )* ;
+unary      → ( "!" | "-" ) unary | primary ;
+primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
 ```
 
-콤마는 **가장 낮은 우선순위**여야 하므로, 기존 최상위였던 `equality` 위에 새 규칙을 끼워 넣고 `expression`이 그것을 가리키게 한다:
+## 6-1. 콤마 연산자
+
+> C에서 블록이 하나의 문장 자리에 여러 문장을 넣게 해주듯, 콤마 연산자는 하나의 표현식 자리에 콤마로 구분된 여러 표현식을 넣게 해준다(함수 호출 인자 목록 안은 제외). 런타임에 왼쪽 피연산자를 평가해 버리고, 오른쪽 피연산자를 평가해 반환한다. C와 같은 우선순위·결합성으로 콤마 표현식을 지원하라.
+
+### 풀이
+
+콤마는 **가장 낮은 우선순위**이고 **좌결합**이다(C와 동일). 따라서 문법 최상위에 새 규칙을 끼우고 `expression`이 그것을 가리키게 한다.
 
 ```
-expression  → comma ;
-comma       → equality ( "," equality )* ;
+expression → comma ;
+comma      → equality ( "," equality )* ;
 ```
 
-규칙 읽는 법: "콤마 표현식은 하나의 equality이며, 그 뒤에 `, equality`가 0개 이상 따라붙는다." 반복(`*`)이 왼쪽 결합을 만든다.
-
-> 📌 6장에는 아직 할당(`=`)·삼항(`?:`)·문장(statement)이 없다. 그래서 콤마 바로 아래 단계가 `equality`다. 이후 챕터에서 할당이 생기면 콤마 아래 단계는 `assignment`로 바뀐다(아래 "이 저장소에서의 구현" 참고).
-
-## 파싱 코드 (책의 Java, 6장 스타일)
-
-문법 규칙 하나가 함수 하나로 내려오는 **재귀 하향 파서(recursive descent)** 패턴 그대로다. `term`/`factor`와 똑같은 모양이라는 점에 주목:
+`( "," equality )*` 반복이 좌결합 시퀀스를 만든다. 구조가 `왼쪽 , 오른쪽`이므로 새 AST 노드 없이 기존 `Expr.Binary`를 재사용할 수 있다.
 
 ```java
 private Expr expression() {
@@ -71,109 +45,241 @@ private Expr comma() {
   while (match(COMMA)) {
     Token operator = previous();
     Expr right = equality();
-    expr = new Expr.Binary(expr, operator, right);   // 기존 Binary 노드 재사용
+    expr = new Expr.Binary(expr, operator, right);
   }
 
   return expr;
 }
 ```
 
-### 왜 새 AST 노드를 만들지 않는가?
-
-콤마는 "왼쪽, 오른쪽" 두 피연산자에 연산자 토큰을 가진다 — 이건 정확히 `Expr.Binary`의 형태다. 따라서 `Comma`라는 새 노드를 추가할 필요 없이 `Expr.Binary(left, commaToken, right)`로 표현하면 된다. 비지터(`visitBinaryExpr`)에서 연산자 종류로 분기만 추가하면 끝.
-
-## 런타임 의미 (인터프리터, 7장에서 채워지는 부분)
-
-6장은 파싱까지만 다루지만, 문제에서 요구한 런타임 동작은 인터프리터의 이항 연산 처리에 분기 하나로 들어간다. 이항 평가는 보통 **양쪽을 먼저 평가**한 뒤 연산자를 적용하는데, 콤마는 그 구조에 자연스럽게 들어맞는다:
+런타임(7장에서 채워지는 부분)은 이항 평가에 분기 하나만 추가한다. 양쪽이 이미 평가된 뒤이므로, 왼쪽은 부수 효과만 남기고 버리고 오른쪽을 반환한다.
 
 ```java
-// visitBinaryExpr 내부 — left, right는 이미 평가됨
 case COMMA:
-  return right;   // left는 이미 평가되어 부수효과를 냈고, 값만 버린다
+  return right;
 ```
 
-`left`를 평가하는 줄이 이미 실행됐기 때문에(할당 같은 부수효과가 일어남) "버린다"는 건 그냥 **그 값을 쓰지 않고 `right`를 반환**한다는 뜻이다.
+### 함수 인자 목록 예외
 
-## 함정: 함수 호출 인자 목록 예외
-
-문제 문장의 괄호 친 단서 — **"단, 함수 호출의 인자 목록 안은 제외"** — 가 핵심 함정이다.
-
-`f(1, 2)`에서 콤마는 **인자 구분자**이지 콤마 연산자가 아니다. 만약 인자 파싱이 `expression()`(= 이제 콤마 규칙)을 호출하면 `1, 2`가 콤마 연산자로 묶여 인자가 **하나(`2`)**가 되어 버린다.
-
-해결책: 인자 목록은 콤마보다 **한 단계 위(우선순위가 높은)** 규칙으로 각 인자를 파싱한다. 6장엔 호출이 없지만, 호출이 생기는 시점(책 10장)의 `arguments` 파싱은 `expression()`이 아니라 그 위 단계를 불러야 한다.
+문제의 단서대로, `f(1, 2)`의 콤마는 연산자가 아니라 **인자 구분자**다. 인자 파싱이 `expression()`(=콤마 규칙)을 부르면 `1, 2`가 콤마 연산자로 묶여 인자가 하나가 되어버린다. 그래서 호출이 도입되는 시점(10장)에는 인자를 콤마보다 **한 단계 위** 규칙으로 파싱해야 한다.
 
 ```java
-// 잘못: arguments.add(expression());  → "1, 2"가 인자 하나로 합쳐짐
-// 올바름: 콤마보다 위 단계로 인자 하나씩
+// 인자 목록: expression() 대신 한 단계 위(여기서는 equality)로 인자 하나씩
 do {
-  arguments.add(assignment());   // (책에서는 해당 챕터의 "콤마 바로 위" 규칙)
+  arguments.add(equality());
 } while (match(COMMA));
 ```
 
-같은 이유로, 콤마를 **허용해야 하는** 자리(삼항의 가운데 피연산자 `a ? b, c : d`나 그냥 표현식 문장)는 `expression()`을 부르고, **금지해야 하는** 자리(인자 목록)는 그 위 단계를 부른다. "어느 자리에서 어느 규칙을 호출하느냐"로 콤마 허용 여부를 제어하는 게 이 문제의 본질이다.
+---
 
-## 이 저장소(klox)에서의 구현
+## 6-2. 조건(삼항) 연산자 `?:`
 
-klox는 이미 할당·삼항·함수 호출이 있는 상태(책 10장 수준)라, 콤마 아래 단계가 `equality`가 아니라 **`assignment`**다. 문법:
+> C 스타일의 조건 연산자 `?:`를 추가하라. `?`와 `:` 사이에는 어떤 우선순위가 허용되는가? 연산자 전체는 좌결합인가 우결합인가?
+
+### 두 질문에 대한 답
+
+- **`?`와 `:` 사이**: 어떤 표현식이든 올 수 있다. 마치 양쪽이 괄호로 묶인 것처럼 취급하므로, 가장 낮은 우선순위(`expression` 전체)까지 허용된다.
+- **결합성**: **우결합**이다. `a ? b : c ? d : e`는 `a ? b : (c ? d : e)`로 묶인다.
+
+### 풀이
+
+콤마와 equality 사이에 `conditional` 단계를 넣는다.
 
 ```
 expression  → comma ;
-comma       → assignment ( "," assignment )* ;
+comma       → conditional ( "," conditional )* ;
+conditional → equality ( "?" expression ":" conditional )? ;
 ```
 
-코드 매핑:
+- 가운데 피연산자는 `expression`(전체 우선순위) — 첫 번째 질문의 답.
+- else 가지는 `conditional`을 **재귀** 호출 — 우결합을 만든다(두 번째 질문의 답).
 
-| 위치 | 파일 | 내용 |
-|---|---|---|
-| 진입점 변경 | `Parser.kt:214` | `expression()` 이 `comma()` 호출 |
-| 콤마 규칙 | `Parser.kt:216` | `assignment ( "," assignment )*`, `Expr.Binary(COMMA)` 생성 |
-| 인자 목록 예외 | `Parser.kt:363` | `finishCall`에서 `expression()` 대신 `assignment()`로 인자 파싱 |
-| 런타임 분기 | `Interpreter.kt:119` | `visitBinaryExpr`의 `TokenType.COMMA -> right` |
+세 개의 피연산자를 담을 새 AST 노드가 필요하다. `tool/GenerateAst`에 다음을 추가한다.
 
-```kotlin
-// Parser.kt
-private fun expression(): Expr = comma()
+```java
+"Conditional : Expr condition, Expr thenBranch, Expr elseBranch",
+```
 
-private fun comma(): Expr {
-    var expr = assignment()
-    while (match(TokenType.COMMA)) {
-        val operator = previous()
-        val right = assignment()
-        expr = Expr.Binary(expr, operator, right)
-    }
-    return expr
+파싱 코드:
+
+```java
+private Expr conditional() {
+  Expr expr = equality();
+
+  if (match(QUESTION)) {
+    Expr thenBranch = expression();
+    consume(COLON,
+        "Expect ':' after then branch of conditional expression.");
+    Expr elseBranch = conditional();          // 우결합 → 재귀
+    expr = new Expr.Conditional(expr, thenBranch, elseBranch);
+  }
+
+  return expr;
 }
 ```
 
-```kotlin
-// Interpreter.kt — visitBinaryExpr 내부 (left, right 이미 평가됨)
-TokenType.COMMA -> {
-    right
+스캐너에는 `?` → `QUESTION`, `:` → `COLON` 토큰을 추가해야 한다. 런타임 평가는 조건을 truthy로 판정해 한쪽 가지만 평가한다.
+
+```java
+@Override
+public Object visitConditionalExpr(Expr.Conditional expr) {
+  if (isTruthy(evaluate(expr.condition))) {
+    return evaluate(expr.thenBranch);
+  }
+  return evaluate(expr.elseBranch);
 }
 ```
 
-`Expr.Binary`를 재사용하므로 Resolver는 수정이 필요 없다(기존 `visitBinaryExpr`가 left·right를 모두 해석함).
+---
 
-### 삼항과의 상호작용
+## 6-3. 이항 연산자의 왼쪽 피연산자 누락 에러 처리
 
-klox의 삼항 가운데 피연산자는 `expression()`(= 콤마)을 호출하므로 `true ? 1, 2 : 3` 같은 코드가 허용되고 `2`로 평가된다. 이는 C와도 일치한다(삼항의 가운데는 완전한 표현식).
+> 각 이항 연산자가 왼쪽 피연산자 없이 등장하는 경우를 다루는 **에러 프로덕션(error production)**을 추가하라. 즉, 표현식 맨 앞에 이항 연산자가 오는 것을 감지해 에러로 보고하되, 오른쪽 피연산자는 적절한 우선순위로 파싱한 뒤 버려라.
 
-## 테스트
+### 풀이
 
-`src/test/kotlin/CommaOperatorTest.kt`에 end-to-end 테스트 5종이 있고, 각 테스트는 실행 시 셸 세션처럼 소스와 결과를 출력한다.
+`primary()`는 어떤 잎도 매칭하지 못하면 `Expect expression.` 에러를 던진다. 그 직전에, 잘못 등장한 이항 연산자를 잡아내는 프로덕션들을 추가한다. 각 프로덕션은 에러를 보고하고, 오른쪽 피연산자를 **해당 연산자보다 한 단계 위** 규칙으로 파싱해 버린 뒤 `null`을 반환한다.
 
-| 케이스 | 입력 | 기대 결과 |
-|---|---|---|
-| 최우측 반환 | `print 1, 2, 3;` | `3` |
-| 연쇄 할당 | `a = 1, b = 2, c = 3;` | `1` / `2` / `3` |
-| 부수효과 후 우측 반환 | `var b = (a = 1, a + 4);` | a=`1`, b=`5` |
-| 인자 목록은 콤마 연산자 아님 | `add(1, 2)` | `3` |
-| 삼항 가운데 피연산자 | `true ? 1, 2 : 3` | `2` |
+```java
+private Expr primary() {
+  if (match(FALSE)) return new Expr.Literal(false);
+  if (match(TRUE)) return new Expr.Literal(true);
+  if (match(NIL)) return new Expr.Literal(null);
 
+  if (match(NUMBER, STRING)) {
+    return new Expr.Literal(previous().literal);
+  }
+
+  if (match(LEFT_PAREN)) {
+    Expr expr = expression();
+    consume(RIGHT_PAREN, "Expect ')' after expression.");
+    return new Expr.Grouping(expr);
+  }
+
+  // 에러 프로덕션: 왼쪽 피연산자가 없는 이항 연산자
+  if (match(BANG_EQUAL, EQUAL_EQUAL)) {
+    error(previous(), "Missing left-hand operand.");
+    equality();
+    return null;
+  }
+  if (match(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL)) {
+    error(previous(), "Missing left-hand operand.");
+    comparison();
+    return null;
+  }
+  if (match(PLUS)) {
+    error(previous(), "Missing left-hand operand.");
+    term();
+    return null;
+  }
+  if (match(SLASH, STAR)) {
+    error(previous(), "Missing left-hand operand.");
+    factor();
+    return null;
+  }
+
+  throw error(peek(), "Expect expression.");
+}
 ```
-./gradlew test --tests CommaOperatorTest
+
+포인트:
+
+- 여기서 `error(...)`는 보고만 시키고 던지지 않는다(`throw`를 빼고 호출). 오른쪽 피연산자를 마저 파싱해 버려야 하기 때문이다.
+- 오른쪽 피연산자는 해당 연산자보다 **한 단계 높은** 규칙으로 파싱한다(`==`는 `equality`가 아니라 `comparison`을 부르는 게 더 정확하지만, 같은 단계를 불러도 동작한다 — 책 답안은 같은 단계를 호출한다).
+- `MINUS`는 제외한다. `-`는 단항 부정으로도 쓰이므로(`-1`) 맨 앞에 와도 에러가 아니다. 반면 Lox에는 단항 `+`가 없으므로 맨 앞의 `+`는 항상 에러다.
+
+---
+
+# 7장 챌린지
+
+## 7-1. 숫자 외 타입의 비교 연산
+
+> 숫자가 아닌 타입에 비교 연산을 허용하면 유용할 수 있다. 문자열에는 합리적인 해석이 있고, `3 < "pancake"` 같은 혼합 타입 비교조차 이종 컬렉션 정렬 등에 쓸 수 있다. 아니면 그냥 버그와 혼란의 원천일 수도 있다. Lox를 확장해 다른 타입 비교를 지원하겠는가? 한다면 어떤 타입 쌍을 허용하고 순서를 어떻게 정의하겠는가? 선택을 정당화하고 다른 언어와 비교하라.
+
+### 풀이 (논술형)
+
+**제안: 문자열끼리(string vs string)의 비교만 허용하고, 혼합 타입은 런타임 에러로 막는다.**
+
+근거:
+
+- **문자열끼리**: 사전순(lexicographic) 정렬은 자연스럽고 널리 통용된다. Java의 `String.compareTo`로 그대로 구현할 수 있어 동작이 예측 가능하다.
+- **혼합 타입(`3 < "pancake"`)**: 자연스러운 순서가 없다. 허용하면 의도치 않은 비교를 조용히 통과시켜 버그를 숨긴다. 막는 편이 안전하다.
+
+다른 언어와 비교:
+
+- **Python 3**: 혼합 타입 비교를 `TypeError`로 막는다. (Python 2는 임의 순서로 허용했는데, 거의 보편적으로 실수로 평가된다.)
+- **JavaScript**: 피연산자를 강제 변환해 비교한다. `3 < "pancake"`는 `"pancake"`가 `NaN`이 되어 모든 비교가 `false` — 직관에 어긋나고 디버깅이 어렵다.
+- 결론적으로 "엄격하게 막기"가 동적 언어에서도 버그를 줄이는 선택이다.
+
+문자열 비교를 추가한다면 각 비교 분기를 다음처럼 일반화한다.
+
+```java
+case LESS:
+  if (left instanceof Double && right instanceof Double) {
+    return (double)left < (double)right;
+  }
+  if (left instanceof String && right instanceof String) {
+    return ((String)left).compareTo((String)right) < 0;
+  }
+  throw new RuntimeError(expr.operator,
+      "Operands must be two numbers or two strings.");
 ```
 
-## 한 줄 요약
+`>`, `>=`, `<=`도 같은 방식으로 `compareTo`의 부호만 바꿔 처리한다.
 
-콤마는 **가장 낮은 우선순위의 좌결합 이항 연산자**다. 문법 최상위에 `comma → assignment ( "," assignment )*`를 끼우고 `Expr.Binary`로 표현하며, 런타임에선 왼쪽을 평가(부수효과)하고 버린 뒤 오른쪽을 반환한다. 유일한 예외는 함수 인자 목록 — 거기서는 콤마보다 한 단계 위 규칙으로 인자를 파싱해 콤마가 구분자로 남게 한다.
+---
+
+## 7-2. 한쪽이 문자열이면 `+`로 연결
+
+> 많은 언어가 `+`의 한쪽이라도 문자열이면 다른 쪽을 문자열로 변환해 연결하도록 정의한다. 예를 들어 `"scone" + 4`는 `scone4`가 된다. `visitBinaryExpr()`을 확장해 이를 지원하라.
+
+### 풀이
+
+`PLUS` 분기에 "한쪽이라도 문자열이면 양쪽을 문자열로 변환해 연결"하는 경우를 추가한다. 숫자를 사람이 읽는 형태로 바꾸기 위해 `stringify`를 쓴다(그래야 `4`가 `4.0`이 아니라 `4`로 연결된다).
+
+```java
+case PLUS:
+  if (left instanceof Double && right instanceof Double) {
+    return (double)left + (double)right;
+  }
+  if (left instanceof String || right instanceof String) {
+    return stringify(left) + stringify(right);
+  }
+  throw new RuntimeError(expr.operator,
+      "Operands must be two numbers or two strings.");
+```
+
+이제 `"scone" + 4`는 `"scone4"`, `3 + " musketeers"`는 `"3 musketeers"`가 된다.
+
+고려사항: `instanceof String ||`로 처리하면 `true + "!"`(→ `"true!"`)나 `nil + "?"`(→ `"nil?"`)처럼 Boolean·nil까지 연결된다. 이것이 편의인지 버그의 원천인지는 설계 판단이다. 숫자↔문자열만 허용하고 싶다면 조건을 더 좁히면 된다.
+
+---
+
+## 7-3. 0으로 나누기
+
+> 지금 숫자를 0으로 나누면 어떻게 되는가? 어떻게 되어야 한다고 보는가? 정당화하라. 다른 언어들은 0으로 나누기를 어떻게 처리하며 왜 그렇게 하는가? `visitBinaryExpr()`을 고쳐 이 경우를 런타임 에러로 감지·보고하라.
+
+### 현재 동작
+
+피연산자가 `Double`이므로 `(double)left / (double)right`는 IEEE 754를 따른다. `1 / 0`은 `Infinity`, `0 / 0`은 `NaN`을 내며 **에러가 나지 않는다**. 사용자에게는 의미 불명의 결과가 조용히 흘러나온다.
+
+### 다른 언어들
+
+- **C**: 정수 0으로 나누기는 정의되지 않은 동작(undefined behavior).
+- **Java**: 정수 나누기는 `ArithmeticException`을 던지지만, 부동소수점 나누기는 `Infinity`/`NaN`을 낸다.
+- **Python**: `ZeroDivisionError`를 던진다 — 조용한 전파보다 명시적 실패를 택한다.
+
+### 선택과 구현
+
+Lox는 숫자가 하나뿐이라(부동소수점), 명시적인 **런타임 에러**로 보고하는 편이 가장 덜 놀랍다. `SLASH` 분기에서 0 검사를 추가한다.
+
+```java
+case SLASH:
+  checkNumberOperands(expr.operator, left, right);
+  if ((double)right == 0) {
+    throw new RuntimeError(expr.operator, "Division by zero.");
+  }
+  return (double)left / (double)right;
+```
+
+`checkNumberOperands`가 먼저 양쪽이 숫자임을 보장하므로, 그 뒤의 캐스트와 0 비교는 안전하다.
