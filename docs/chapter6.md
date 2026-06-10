@@ -180,6 +180,8 @@ private Token previous() {
 
 ### 핵심 코드 패턴 — `equality()`
 
+`equality   → comparison ( ( "!=" | "==" ) comparison )* ;`
+
 ```java
 private Expr expression() {
   return equality();
@@ -237,6 +239,8 @@ private Expr factor() {
 ### `unary()`만 다른 이유 — 우결합
 
 단항 연산자는 우결합이라 루프가 아니라 **자기 자신을 재귀 호출**한다:
+
+`unary      → ( "!" | "-" ) unary | primary ;`
 
 ```java
 private Expr unary() {
