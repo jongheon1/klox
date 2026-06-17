@@ -620,6 +620,50 @@ True  >> ifTrue: t ifFalse: f   →  t value     (참이면 첫째 블록 실행
 False >> ifTrue: t ifFalse: f   →  f value     (거짓이면 둘째 블록 실행)
 ```
 
+### Smalltalk 클래스 라이브러리의 실제 구현
+
+`ifTrue:ifFalse:`는 컴파일러 키워드가 아니라 **`Boolean`의 메서드**다. `[ ... ]`는 블록(클로저, 1급 객체)이고, 거기에 `value` 메시지를 보내면 실행된다. 분기는 오직 "어느 서브클래스에 메시지가 도착했는가"로 결정된다.
+
+```smalltalk
+"True 클래스의 메서드"
+ifTrue: trueBlock ifFalse: falseBlock
+    ^trueBlock value      "참이면 then 블록만 평가해서 그 값을 반환"
+
+"False 클래스의 메서드"
+ifTrue: trueBlock ifFalse: falseBlock
+    ^falseBlock value     "거짓이면 else 블록만 평가"
+```
+
+`true`는 `True`의 (유일한) 인스턴스, `false`는 `False`의 인스턴스다. 같은 `ifTrue:ifFalse:` 메시지라도 receiver의 클래스가 달라 **동적 디스패치**가 다른 메서드 본문으로 보낸다. `if` 문이 하던 일을 메서드 룩업이 대신하는 것이다.
+
+### 실제로 쓰는 모습
+
+조건 분기, 한쪽 가지, 값 반환, 단락 평가, 심지어 반복까지 전부 "객체에 블록을 넘기는 메시지"다.
+
+```smalltalk
+"기본 if/else — 그런데 문법이 아니라 메시지"
+(n > 0)
+    ifTrue:  [ Transcript show: 'positive' ]
+    ifFalse: [ Transcript show: 'non-positive' ].
+
+"한쪽 가지만 — ifTrue: / ifFalse: 단독"
+list isEmpty ifTrue:  [ ^nil ].
+found        ifFalse: [ self keepSearching ].
+
+"표현식처럼 값을 돌려받기"
+max := (a > b) ifTrue: [ a ] ifFalse: [ b ].
+
+"단락 평가도 같은 틀 — and:/or: 가 '블록'을 받아 필요할 때만 평가"
+(x ~= 0) and: [ (10 / x) > 1 ].   "왼쪽이 false면 블록을 아예 평가하지 않음 → 0 나눗셈 회피"
+(x = 0)  or:  [ (10 / x) > 1 ].
+
+"nil 검사도 메시지 — UndefinedObject>>ifNil: 로 디스패치"
+config ifNil: [ Config default ] ifNotNil: [ :c | c load ].
+
+"반복마저 분기와 똑같은 수법 — whileTrue: 는 블록 receiver에 보내는 메시지"
+[ i < 10 ] whileTrue: [ Transcript show: i printString. i := i + 1 ].
+```
+
 즉 `if`라는 **문법**이 없어도, `true`와 `false`가 서로 다른 객체이고 같은 메시지에 다르게 반응한다는 사실만으로 분기가 된다. 의사 Lox로 흉내 내면:
 
 ```
