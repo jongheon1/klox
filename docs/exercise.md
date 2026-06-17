@@ -664,15 +664,67 @@ config ifNil: [ Config default ] ifNotNil: [ :c | c load ].
 [ i < 10 ] whileTrue: [ Transcript show: i printString. i := i + 1 ].
 ```
 
-즉 `if`라는 **문법**이 없어도, `true`와 `false`가 서로 다른 객체이고 같은 메시지에 다르게 반응한다는 사실만으로 분기가 된다. 의사 Lox로 흉내 내면:
+### 한 줄씩 뜯어보기
+
+위 예시들의 공통 골격은 **"receiver가 분기를 결정하고, 인자로 넘긴 블록은 *지연된* 후보 계산"**이라는 것이다.
+
+- `(n > 0) ifTrue: [..] ifFalse: [..]` — `n > 0`이 먼저 평가돼 `true`/`false` **객체**가 되고, 그 객체가 receiver로서 `ifTrue:ifFalse:`를 받는다. 클래스(`True`/`False`)에 따라 한쪽 블록에만 `value`가 간다. `if` 문은 어디에도 없다.
+- `list isEmpty ifTrue: [ ^nil ]` — 인자가 하나뿐인 `ifTrue:`. `False`의 `ifTrue:`는 블록을 무시하고 `nil`을 반환하도록 구현돼 있어, 거짓일 때 자연히 아무 일도 안 일어난다.
+- `max := (a > b) ifTrue: [ a ] ifFalse: [ b ]` — 블록이 값을 내므로 `ifTrue:ifFalse:` 전체가 **표현식**처럼 값을 낸다. 고른 블록의 `value` 결과가 `max`에 들어간다(삼항 `?:`와 같은 역할).
+- `(x ~= 0) and: [ (10 / x) > 1 ]` — 단락 평가의 핵심. `and:`는 값이 아니라 **블록**을 받는다. receiver가 `false`면 `False>>and:`가 블록을 *평가하지 않고* 곧장 `false`를 반환한다. 그래서 `x = 0`이어도 `10 / x`가 실행되지 않는다. 인자가 "이미 계산된 값"이 아니라 "지연된 계산(블록)"이라는 점이 단락 평가를 가능케 한다.
+- `config ifNil: [..] ifNotNil: [..]` — 디스패치 대상이 Boolean이 아니라 `nil`이다. `nil`은 `UndefinedObject`의 인스턴스라 `ifNil:`을 일반 객체와 다르게 구현한다. "분기 = 메시지 디스패치"가 Boolean을 넘어 모든 객체로 일반화되는 것.
+- `[ i < 10 ] whileTrue: [ .. ]` — receiver가 **블록** `[ i < 10 ]` 자체다. `BlockClosure>>whileTrue:`는 자기(조건 블록)를 `value`로 평가해 참이면 본문 블록을 실행하고 자신을 다시 호출한다. 반복마저 메시지 + 블록 + 재귀로 환원된다 — 바로 다음 9-2의 주제로 이어진다.
+
+### 의사 Lox로 흉내 내기
+
+즉 `if`라는 **문법**이 없어도, `true`와 `false`가 서로 다른 객체이고 같은 메시지에 다르게 반응한다는 사실만으로 분기가 된다. Lox에는 불리언이 이미 내장이라, 흉내를 내려면 먼저 `true`/`false`를 **"두 후보 중 하나를 고르는 객체"**로 직접 인코딩한다(1급 함수 + 클로저로).
 
 ```
-fun ifTrue(condition, thenFn, elseFn) {
-  return condition(thenFn, elseFn);   // condition 자체가 둘 중 하나를 고름
+// true / false 를 '고르는 법이 다른 두 구현체'로 만든다
+fun makeTrue() {
+  fun choose(thenFn, elseFn) { return thenFn(); }   // 첫째를 고름
+  return choose;
 }
+fun makeFalse() {
+  fun choose(thenFn, elseFn) { return elseFn(); }   // 둘째를 고름
+  return choose;
+}
+
+// if/else 자리: condition 에게 '골라줘' 하고 위임할 뿐
+fun ifElse(condition, thenFn, elseFn) {
+  return condition(thenFn, elseFn);
+}
+
+fun sayT() { print "T"; }
+fun sayF() { print "F"; }
+
+ifElse(makeTrue(),  sayT, sayF);   // T
+ifElse(makeFalse(), sayT, sayF);   // F
 ```
 
-- **언어 예시**: **Smalltalk**(메시지 `ifTrue:ifFalse:`). Lambda Calculus의 처치 불리언(Church boolean)도 같은 원리다(`true = λa.λb.a`, `false = λa.λb.b`).
+### 무엇이 동적 디스패치되는가 (인터페이스로 보기)
+
+인터페이스/구현체 구도가 맞다. 다만 역할을 정확히 짚어야 한다 — **디스패치되는 건 `condition`이고, `thenFn`·`elseFn`은 디스패치 대상이 아니라 그냥 인자(후보)다.**
+
+- **인터페이스 = `condition`**: "두 후보 중 하나를 골라 실행한다"는 *하나의 계약*. `condition` 변수는 그 계약 타입의 참조다.
+- **구현체 = `true`와 `false`**: 같은 계약을 다르게 구현한 두 객체. `true`는 첫째를, `false`는 둘째를 고른다.
+- **디스패치 대상 = `condition`(= receiver)**: `condition(thenFn, elseFn)`을 호출하는 순간, condition의 실제 정체(true냐 false냐)가 어느 구현을 실행할지 결정한다. 이게 `if`를 대체하는 분기다.
+- **`thenFn`·`elseFn` = 인자**: 디스패처(condition)에게 건네는 두 선택지일 뿐. 골라지는 입장이지, 고르는 주체가 아니다.
+
+Java 인터페이스로 옮기면 한눈에 보인다.
+
+```java
+interface Cond { Object select(Supplier<Object> thenFn, Supplier<Object> elseFn); }
+
+Cond TRUE  = (t, e) -> t.get();   // 구현체 1: 첫째 선택
+Cond FALSE = (t, e) -> e.get();   // 구현체 2: 둘째 선택
+
+cond.select(thenFn, elseFn);      // cond 의 런타임 타입(TRUE/FALSE)이 분기를 결정
+```
+
+`cond`가 `TRUE`면 `t.get()`, `FALSE`면 `e.get()`이 불린다 — `if` 없이, 순전히 `cond`에 대한 가상 메서드 룩업만으로. Smalltalk의 `condition ifTrue: [..] ifFalse: [..]`에 그대로 대응한다: **receiver `condition` = 이 `cond`**, **두 블록 = `thenFn`/`elseFn`**, **`True`/`False` 클래스 = 두 구현체**.
+
+- **언어 예시**: **Smalltalk**(메시지 `ifTrue:ifFalse:`). Lambda Calculus의 처치 불리언(Church boolean)도 같은 원리다(`true = λa.λb.a`, `false = λa.λb.b`) — 위 `makeTrue`/`makeFalse`가 바로 이 람다를 Lox로 옮긴 것이다.
 
 ---
 
