@@ -18,6 +18,9 @@ class Resolver(
         endScope()
     }
 
+    override fun visitBreakStmt(stmt: Stmt.Break) {
+    }
+
     override fun visitExpressionStmt(stmt: Stmt.Expression) {
         resolve(stmt.expression)
     }

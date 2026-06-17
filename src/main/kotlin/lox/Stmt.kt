@@ -4,6 +4,8 @@ sealed class Stmt {
     interface Visitor<R> {
         fun visitBlockStmt(stmt: Block): R
 
+        fun visitBreakStmt(stmt: Break): R
+
         fun visitExpressionStmt(stmt: Expression): R
 
         fun visitFunctionStmt(stmt: Function): R
@@ -23,6 +25,12 @@ sealed class Stmt {
         val statements: List<Stmt>,
     ) : Stmt() {
         override fun <R> accept(visitor: Visitor<R>): R = visitor.visitBlockStmt(this)
+    }
+
+    class Break(
+        val keyword: Token,
+    ) : Stmt() {
+        override fun <R> accept(visitor: Visitor<R>): R = visitor.visitBreakStmt(this)
     }
 
     class Expression(

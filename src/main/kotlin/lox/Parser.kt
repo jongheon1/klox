@@ -3,6 +3,7 @@ package lox
 import lox.TokenType.AND
 import lox.TokenType.BANG
 import lox.TokenType.BANG_EQUAL
+import lox.TokenType.BREAK
 import lox.TokenType.CLASS
 import lox.TokenType.ELSE
 import lox.TokenType.EOF
@@ -45,6 +46,10 @@ class Parser(
 
     private var current = 0
 
+    // How many loops we are currently inside (parse-time). `break` is only
+    // legal when this is > 0. Reset to 0 when descending into a function body.
+    private var loopDepth = 0
+
     fun parse(): List<Stmt> {
         val statements = mutableListOf<Stmt>()
         while (!isAtEnd()) {
@@ -81,8 +86,15 @@ class Parser(
 
         consume(RIGHT_PAREN, "Expect ')' after parameters.")
         consume(LEFT_BRACE, "Expect '{' before $kind body.")
-        val body = block()
-        return Stmt.Function(name, parameters, body)
+
+        val enclosingLoopDepth = loopDepth
+        loopDepth = 0
+        try {
+            val body = block()
+            return Stmt.Function(name, parameters, body)
+        } finally {
+            loopDepth = enclosingLoopDepth
+        }
     }
 
     private fun varDeclaration(): Stmt {
@@ -103,8 +115,18 @@ class Parser(
         if (match(PRINT)) return printStatement()
         if (match(RETURN)) return returnStatement()
         if (match(WHILE)) return whileStatement()
+        if (match(BREAK)) return breakStatement()
         if (match(LEFT_BRACE)) return Stmt.Block(block())
         return expressionStatement()
+    }
+
+    private fun breakStatement(): Stmt {
+        val keyword = previous()
+        if (loopDepth == 0) {
+            error(keyword, "Must be inside a loop to use 'break'.")
+        }
+        consume(SEMICOLON, "Expect ';' after 'break'.")
+        return Stmt.Break(keyword)
     }
 
     private fun forStatement(): Stmt {
@@ -135,7 +157,13 @@ class Parser(
             }
         consume(RIGHT_PAREN, "Expect ')' after for clauses.")
 
-        var body = statement()
+        loopDepth++
+        var body =
+            try {
+                statement()
+            } finally {
+                loopDepth--
+            }
 
         if (increment != null) {
             body = Stmt.Block(listOf(body, Stmt.Expression(increment)))
@@ -171,7 +199,13 @@ class Parser(
         val condition = expression()
         consume(RIGHT_PAREN, "Expect ')' after condition.")
 
-        val body = statement()
+        loopDepth++
+        val body =
+            try {
+                statement()
+            } finally {
+                loopDepth--
+            }
         return Stmt.While(condition, body)
     }
 

@@ -3,6 +3,11 @@ package lox
 class Environment(
     val enclosing: Environment? = null,
 ) {
+    companion object {
+        /** Marker for a variable that was declared (`var a;`) but never given a value. */
+        val UNINITIALIZED = Any()
+    }
+
     private val values = mutableMapOf<String, Any?>()
 
     fun define(

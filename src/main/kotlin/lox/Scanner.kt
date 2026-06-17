@@ -12,6 +12,7 @@ class Scanner(
         private val keywords: Map<String, TokenType> =
             mapOf(
                 "and" to TokenType.AND,
+                "break" to TokenType.BREAK,
                 "class" to TokenType.CLASS,
                 "else" to TokenType.ELSE,
                 "false" to TokenType.FALSE,

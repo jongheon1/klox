@@ -1,5 +1,8 @@
 package lox
 
+/** Unwinds the stack out of the innermost loop when a `break` is executed. */
+private class BreakException : RuntimeException()
+
 class Interpreter :
     Expr.Visitor<Any?>,
     Stmt.Visitor<Unit> {
@@ -186,11 +189,17 @@ class Interpreter :
 
     private fun lookUpVariable(name: Token, expr: Expr): Any? {
         val distance = locals[expr]
-        return if (distance != null) {
-            environment.getAt(distance, name.lexeme)
-        } else {
-            globals.get(name)
+        val value =
+            if (distance != null) {
+                environment.getAt(distance, name.lexeme)
+            } else {
+                globals.get(name)
+            }
+
+        if (value === Environment.UNINITIALIZED) {
+            throw RuntimeError(name, "Unassigned variable '${name.lexeme}'.")
         }
+        return value
     }
 
     override fun visitBlockStmt(stmt: Stmt.Block) {
@@ -232,9 +241,17 @@ class Interpreter :
     }
 
     override fun visitWhileStmt(stmt: Stmt.While) {
-        while (isTruthy(evaluate(stmt.condition))) {
-            execute(stmt.body)
+        try {
+            while (isTruthy(evaluate(stmt.condition))) {
+                execute(stmt.body)
+            }
+        } catch (_: BreakException) {
+            // `break` exits the innermost enclosing loop.
         }
+    }
+
+    override fun visitBreakStmt(stmt: Stmt.Break) {
+        throw BreakException()
     }
 
     override fun visitPrintStmt(stmt: Stmt.Print) {
@@ -248,7 +265,12 @@ class Interpreter :
     }
 
     override fun visitVarStmt(stmt: Stmt.Var) {
-        val value = stmt.initializer?.let { evaluate(it) }
+        val value =
+            if (stmt.initializer != null) {
+                evaluate(stmt.initializer)
+            } else {
+                Environment.UNINITIALIZED
+            }
         environment.define(stmt.name.lexeme, value)
     }
 
