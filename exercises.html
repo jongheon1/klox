@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>klox 연습문제 풀이 · Crafting Interpreters 6–9장</title>
+<style>
+  :root{
+    --bg:#f7f8fb; --card:#ffffff; --ink:#1b2230; --muted:#667085;
+    --accent:#6366f1; --accent2:#8b5cf6; --accent3:#0ea5e9;
+    --line:#e7e9f0; --line2:#eef0f6;
+    --code-bg:#0f1422; --code-ink:#e7eaf3; --code-cmt:#7e8aa6; --code-str:#f3b07a; --code-kw:#c4b5fd;
+    --ok:#10b981; --warn:#f59e0b; --bad:#ef4444;
+    --shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Pretendard","Apple SD Gothic Neo","Segoe UI",system-ui,-apple-system,"Malgun Gothic",sans-serif;
+    line-height:1.65; -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit}
+  code,pre,.mono{font-family:"JetBrains Mono","SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace}
+
+  /* ---------- header ---------- */
+  header.hero{
+    background:radial-gradient(1200px 400px at 12% -10%,rgba(139,92,246,.18),transparent 60%),
+               radial-gradient(900px 380px at 90% -20%,rgba(14,165,233,.16),transparent 55%),
+               linear-gradient(180deg,#fff, #fbfcff);
+    border-bottom:1px solid var(--line);
+  }
+  .hero-in{max-width:1080px;margin:0 auto;padding:54px 24px 26px}
+  .kicker{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  h1{font-size:clamp(28px,4.2vw,44px);margin:.28em 0 .15em;letter-spacing:-.02em;line-height:1.15}
+  .sub{color:var(--muted);font-size:17px;max-width:60ch;margin:0}
+  .hero-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
+  .chip{font-size:12.5px;font-weight:600;color:#3b3f51;background:#fff;border:1px solid var(--line);
+        padding:5px 11px;border-radius:999px;box-shadow:var(--shadow)}
+
+  /* ---------- sticky nav ---------- */
+  nav.tabs{position:sticky;top:0;z-index:40;background:rgba(247,248,251,.82);
+    backdrop-filter:saturate(140%) blur(10px);border-bottom:1px solid var(--line)}
+  .tabs-in{max-width:1080px;margin:0 auto;padding:10px 24px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .tabs a{font-size:13.5px;font-weight:600;color:var(--muted);text-decoration:none;
+    padding:7px 13px;border-radius:9px;transition:.15s}
+  .tabs a:hover{color:var(--ink);background:#fff}
+  .tabs a.active{color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:var(--shadow)}
+  .tabs .spacer{flex:1}
+
+  /* ---------- layout ---------- */
+  main{max-width:1080px;margin:0 auto;padding:34px 24px 90px}
+  section.chapter{padding-top:30px}
+  .ch-head{display:flex;align-items:baseline;gap:14px;margin:26px 0 6px}
+  .ch-num{font-size:13px;font-weight:800;color:#fff;background:var(--ink);border-radius:8px;padding:4px 10px;letter-spacing:.04em}
+  .ch-title{font-size:23px;font-weight:800;letter-spacing:-.01em}
+  .ch-desc{color:var(--muted);margin:.1em 0 6px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:22px 24px;margin:18px 0;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 4px;font-size:18.5px;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+  .tag{font-size:11.5px;font-weight:800;letter-spacing:.04em;color:var(--accent);background:#eef0ff;border:1px solid #e1e4ff;border-radius:7px;padding:2px 8px}
+  .tag.impl{color:#0a7d57;background:#e7f8f1;border-color:#cdeede}
+  .tag.essay{color:#9a6212;background:#fdf3e3;border-color:#f6e4c5}
+  blockquote.q{margin:12px 0;padding:11px 16px;border-left:3px solid var(--accent2);
+    background:#faf9ff;border-radius:0 10px 10px 0;color:#444b5e;font-size:14.5px}
+  ul.pts{margin:12px 0;padding-left:0;list-style:none}
+  ul.pts li{position:relative;padding:3px 0 3px 22px}
+  ul.pts li::before{content:"";position:absolute;left:4px;top:13px;width:7px;height:7px;border-radius:2px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2))}
+  .small{font-size:13.5px;color:var(--muted)}
+  .note{font-size:13.5px;color:#475067;background:#f4f6fb;border:1px solid var(--line2);border-radius:10px;padding:10px 14px;margin:12px 0}
+  .note b{color:var(--ink)}
+
+  /* ---------- code ---------- */
+  .codewrap{position:relative;margin:12px 0}
+  .codewrap .lang{position:absolute;top:8px;right:10px;font-size:10.5px;font-weight:700;letter-spacing:.08em;
+    text-transform:uppercase;color:#9aa3bd;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);
+    padding:2px 7px;border-radius:6px}
+  pre{margin:0;background:var(--code-bg);color:var(--code-ink);border-radius:12px;padding:16px 18px;overflow:auto;
+    font-size:13px;line-height:1.62;border:1px solid #1b2236}
+  pre .c{color:var(--code-cmt);font-style:italic}
+  pre .s{color:var(--code-str)}
+  pre .k{color:var(--code-kw);font-weight:600}
+  pre .hi{background:rgba(99,102,241,.22);border-radius:4px;padding:0 2px}
+
+  table.cmp{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;overflow:hidden;border-radius:10px;border:1px solid var(--line)}
+  table.cmp th,table.cmp td{padding:9px 12px;border-bottom:1px solid var(--line2);text-align:left;vertical-align:top}
+  table.cmp th{background:#f4f6fb;font-weight:700;font-size:12.5px;letter-spacing:.02em}
+  table.cmp tr:last-child td{border-bottom:none}
+  table.cmp td b{color:var(--ink)}
+  .res-ok{color:var(--ok);font-weight:700}.res-bad{color:var(--bad);font-weight:700}.res-warn{color:var(--warn);font-weight:700}
+
+  /* ---------- interactive demo shell ---------- */
+  .demo{margin:16px 0 4px;border:1px solid var(--line);border-radius:16px;overflow:hidden;background:linear-gradient(180deg,#fff,#fcfcff)}
+  .demo-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:13px 16px;border-bottom:1px solid var(--line2);background:#fbfbfe}
+  .demo-bar .dt{font-weight:700;font-size:13.5px;color:#3a4258;margin-right:auto;display:flex;align-items:center;gap:8px}
+  .demo-bar .dt .dot{width:9px;height:9px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2))}
+  .btn{font:inherit;font-size:13px;font-weight:650;color:#fff;border:none;cursor:pointer;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));padding:8px 14px;border-radius:10px;
+    box-shadow:var(--shadow);transition:.12s;display:inline-flex;align-items:center;gap:7px}
+  .btn:hover{filter:brightness(1.06);transform:translateY(-1px)}
+  .btn:active{transform:translateY(0)}
+  .btn.ghost{background:#fff;color:#3a4258;border:1px solid var(--line)}
+  .btn.ghost.on{background:#eef0ff;color:var(--accent);border-color:#d9ddff}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;filter:none}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+  .seg button{font:inherit;font-size:12.5px;font-weight:650;border:none;background:#fff;color:#566;cursor:pointer;padding:7px 13px}
+  .seg button.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+  .demo-stage{padding:18px 16px}
+
+  .term{background:#0f1422;color:#d7f7e3;border-radius:10px;padding:12px 14px;font-family:"JetBrains Mono",Consolas,monospace;
+    font-size:13px;min-height:42px;white-space:pre-wrap;border:1px solid #1b2236}
+  .term .muted{color:#6b7796}
+  .term .out{color:#8ce6b0}
+
+  /* dispatch demo */
+  .disp-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center}
+  @media(max-width:640px){.disp-grid{grid-template-columns:1fr}}
+  .obj{border:1.5px solid var(--line);border-radius:14px;padding:14px;background:#fff;text-align:center;transition:.25s}
+  .obj .role{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#9aa3bd}
+  .obj .val{font-size:20px;font-weight:800;margin:4px 0;font-family:"JetBrains Mono",monospace}
+  .obj.cond{border-color:#cdb9ff;background:linear-gradient(180deg,#fbf9ff,#fff)}
+  .branches{display:flex;flex-direction:column;gap:10px}
+  .branch{border:1.5px dashed var(--line);border-radius:12px;padding:11px 13px;background:#fff;transition:.25s;opacity:.7}
+  .branch .bn{font-family:"JetBrains Mono",monospace;font-size:13px}
+  .branch.fire{opacity:1;border-style:solid;border-color:var(--ok);background:#ecfdf5;box-shadow:0 6px 18px rgba(16,185,129,.18);transform:translateY(-2px)}
+  .branch.skip{opacity:.32;filter:grayscale(.4)}
+  .arrow{font-size:26px;color:var(--accent2);text-align:center;transition:.25s}
+  .arrow.up{transform:translateY(-46px)}.arrow.down{transform:translateY(46px)}
+  @media(max-width:640px){.arrow{transform:rotate(90deg)}.arrow.up,.arrow.down{transform:rotate(90deg)}}
+
+  /* stack demo */
+  .stack-wrap{display:grid;grid-template-columns:1fr 230px;gap:16px}
+  @media(max-width:720px){.stack-wrap{grid-template-columns:1fr}}
+  .stack-col{display:flex;flex-direction:column-reverse;gap:7px;min-height:230px;justify-content:flex-start;
+    padding:12px;border:1px dashed var(--line);border-radius:12px;background:repeating-linear-gradient(180deg,#fff,#fff 26px,#fafbff 26px,#fafbff 27px)}
+  .frame{border:1.5px solid #d9ddff;background:linear-gradient(180deg,#fff,#f5f6ff);border-radius:10px;padding:8px 12px;
+    display:flex;justify-content:space-between;align-items:center;gap:10px;animation:pop .22s ease;box-shadow:0 2px 6px rgba(99,102,241,.08)}
+  @keyframes pop{from{opacity:0;transform:translateY(8px) scale(.96)}to{opacity:1}}
+  .frame .fn{font-family:"JetBrains Mono",monospace;font-size:13px;font-weight:700}
+  .frame .pend{font-family:"JetBrains Mono",monospace;font-size:12px;color:var(--accent)}
+  .frame.active{border-color:var(--accent2);box-shadow:0 6px 16px rgba(139,92,246,.2)}
+  .frame.done{border-color:#bbf0d6;background:#f0fdf7}
+  .frame.done .pend{color:var(--ok)}
+  .frame.ghost{opacity:.34;border-style:dashed;box-shadow:none;filter:grayscale(.3)}
+  .gauge{border:1px solid var(--line);border-radius:12px;padding:13px 14px;background:#fff}
+  .gauge .lbl{font-size:11.5px;font-weight:700;color:#9aa3bd;text-transform:uppercase;letter-spacing:.05em}
+  .gauge .big{font-size:26px;font-weight:800;font-family:"JetBrains Mono",monospace;margin:2px 0 6px}
+  .bars{display:flex;align-items:flex-end;gap:4px;height:54px}
+  .bars i{flex:1;background:linear-gradient(180deg,var(--accent),var(--accent2));border-radius:3px 3px 0 0;min-height:4px;transition:.2s}
+  .bars.flat i{background:linear-gradient(180deg,var(--ok),#34d399)}
+  .cap{margin-top:12px;font-size:13.5px;color:#3c4256;min-height:20px}
+
+  /* loop demo */
+  .loop-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:640px){.loop-grid{grid-template-columns:1fr}}
+  .iters{display:flex;flex-wrap:wrap;gap:7px}
+  .it{width:38px;height:38px;border-radius:10px;border:1.5px solid var(--line);display:flex;align-items:center;justify-content:center;
+    font-family:"JetBrains Mono",monospace;font-weight:700;font-size:14px;background:#fff;transition:.2s;color:#7a8197}
+  .it.printed{border-color:var(--ok);background:#ecfdf5;color:#0a7d57}
+  .it.brk{border-color:var(--bad);background:#fef2f2;color:var(--bad);transform:scale(1.06)}
+  .it.cur{box-shadow:0 0 0 3px rgba(99,102,241,.25);border-color:var(--accent)}
+  .statebox{font-family:"JetBrains Mono",monospace;font-size:13px;line-height:1.9}
+  .statebox .kv{display:flex;justify-content:space-between;border-bottom:1px dashed var(--line2);padding:2px 0}
+  .statebox .kv b{color:var(--accent)}
+
+  footer{max-width:1080px;margin:0 auto;padding:30px 24px 60px;color:var(--muted);font-size:13px;border-top:1px solid var(--line)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:8px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:11px;height:11px;border-radius:3px;display:inline-block}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-in">
+    <div class="kicker">Crafting Interpreters · klox</div>
+    <h1>연습문제 풀이 — 6 ~ 9장</h1>
+    <p class="sub">Parsing Expressions · Evaluating Expressions · Statements and State · Control Flow.
+    각 장 끝 챌린지 풀이를, 움직이는 위젯으로 더 또렷하게.</p>
+    <div class="hero-meta">
+      <span class="chip">12개 챌린지</span>
+      <span class="chip">동적 디스패치 시뮬레이터</span>
+      <span class="chip">꼬리 재귀 스택 애니메이션</span>
+      <span class="chip">break 루프 실행기</span>
+    </div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <div class="tabs-in">
+    <a href="#ch6" data-spy="ch6">6장 · Parsing</a>
+    <a href="#ch7" data-spy="ch7">7장 · Evaluating</a>
+    <a href="#ch8" data-spy="ch8">8장 · State</a>
+    <a href="#ch9" data-spy="ch9">9장 · Control Flow</a>
+    <span class="spacer"></span>
+    <a href="#ch9-2" style="color:var(--accent)">▶ 스택 데모</a>
+  </div>
+</nav>
+
+<main>
+
+<!-- ===================== CH6 ===================== -->
+<section class="chapter" id="ch6">
+  <div class="ch-head"><span class="ch-num">6장</span><span class="ch-title">Parsing Expressions</span></div>
+  <p class="ch-desc">토큰 나열을 문법 규칙에 맞는 AST로. 출발 문법:</p>
+  <div class="codewrap"><span class="lang">grammar</span><pre data-lang="text">expression → equality ;
+equality   → comparison ( ( "!=" | "==" ) comparison )* ;
+comparison → term ( ( "&gt;" | "&gt;=" | "&lt;" | "&lt;=" ) term )* ;
+term       → factor ( ( "-" | "+" ) factor )* ;
+factor     → unary ( ( "/" | "*" ) unary )* ;
+unary      → ( "!" | "-" ) unary | primary ;
+primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;</pre></div>
+
+  <!-- 6-1 -->
+  <div class="card" id="ch6-1">
+    <h3><span class="tag impl">구현</span> 6-1. 콤마 연산자</h3>
+    <blockquote class="q">하나의 표현식 자리에 콤마로 구분된 여러 표현식을 넣는다(함수 인자 목록 제외). 왼쪽을 평가해 버리고 오른쪽을 반환. C와 같은 우선순위·결합성.</blockquote>
+    <ul class="pts">
+      <li><b>가장 낮은 우선순위 · 좌결합</b> → 문법 최상위에 <code>comma</code> 규칙을 끼우고 <code>expression</code>이 그것을 가리키게.</li>
+      <li>구조가 <code>왼쪽 , 오른쪽</code>이라 새 AST 노드 없이 <code>Expr.Binary</code> 재사용.</li>
+    </ul>
+    <div class="codewrap"><span class="lang">grammar</span><pre data-lang="text">expression → comma ;
+comma      → equality ( "," equality )* ;          ← 새로 추가</pre></div>
+    <div class="codewrap"><span class="lang">java</span><pre data-lang="java">private Expr comma() {
+  Expr expr = equality();
+  while (match(COMMA)) {
+    Token operator = previous();
+    Expr right = equality();
+    expr = new Expr.Binary(expr, operator, right);   // 좌결합 누적
+  }
+  return expr;
+}
+// 런타임: visitBinaryExpr 에 한 줄
+case COMMA: return right;   // left는 이미 평가됨(부수효과) → 버리고 right 반환</pre></div>
+
+    <div class="demo" id="commaDemo">
+      <div class="demo-bar">
+        <span class="dt"><span class="dot"></span>콤마 평가기 — 왼쪽은 버리고, 마지막만 값</span>
+        <div class="seg" id="commaPick">
+          <button data-x='a = 1, b = 2, c = 3' class="on">a=1, b=2, c=3</button>
+          <button data-x='1, 2, 3'>1, 2, 3</button>
+          <button data-x='"a", "b", "c"'>"a", "b", "c"</button>
+        </div>
+        <button class="btn" id="commaStep">▶ 한 단계</button>
+        <button class="btn ghost" id="commaReset">↺</button>
+      </div>
+      <div class="demo-stage">
+        <div class="term" id="commaTerm"></div>
+        <div class="cap" id="commaCap"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6-2 -->
+  <div class="card" id="ch6-2">
+    <h3><span class="tag impl">구현</span> 6-2. 조건(삼항) 연산자 <code>?:</code></h3>
+    <blockquote class="q"><code>?</code>와 <code>:</code> 사이엔 어떤 우선순위가 허용되나? 전체는 좌결합인가 우결합인가?</blockquote>
+    <ul class="pts">
+      <li><b>가운데</b>: 어떤 표현식이든(괄호로 감싼 듯) → <code>expression</code> 전체 허용.</li>
+      <li><b>결합성</b>: <b>우결합</b>. <code>a ? b : c ? d : e</code> = <code>a ? b : (c ? d : e)</code>.</li>
+    </ul>
+    <div class="codewrap"><span class="lang">grammar</span><pre data-lang="text">comma       → conditional ( "," conditional )* ;
+conditional → equality ( "?" expression ":" conditional )? ;   ← else 가지는 재귀 = 우결합</pre></div>
+    <div class="codewrap"><span class="lang">java</span><pre data-lang="java">private Expr conditional() {
+  Expr expr = equality();
+  if (match(QUESTION)) {
+    Expr thenBranch = expression();                 // 가운데 = 전체 우선순위
+    consume(COLON, "Expect ':' after then branch.");
+    Expr elseBranch = conditional();                // 우결합 → 재귀
+    expr = new Expr.Conditional(expr, thenBranch, elseBranch);
+  }
+  return expr;
+}</pre></div>
+    <p class="small"><code>1 ? 2 : 3 ? 4 : 5</code> 가 <b>우결합</b>으로 묶이는 트리:</p>
+    <div class="codewrap"><span class="lang">tree</span><pre data-lang="text">   ?:                 1 ? 2 : (3 ? 4 : 5)
+  /│\
+ 1 2 ?:               조건 1이 truthy → 2
+     /│\              (오른쪽 ?: 는 평가되지 않음)
+    3 4 5</pre></div>
+  </div>
+
+  <!-- 6-3 -->
+  <div class="card" id="ch6-3">
+    <h3><span class="tag impl">구현</span> 6-3. 왼쪽 피연산자 누락 에러 프로덕션</h3>
+    <blockquote class="q">표현식 맨 앞에 이항 연산자가 오는 것을 감지해 에러로 보고하되, 오른쪽 피연산자는 적절한 우선순위로 파싱한 뒤 버려라.</blockquote>
+    <table class="cmp">
+      <tr><th>입력</th><th>결과</th></tr>
+      <tr><td><code>&lt;= 5</code></td><td><span class="res-bad">Missing left-hand operand.</span></td></tr>
+      <tr><td><code>* 3</code> / <code>+ 4</code> / <code>== 2</code></td><td><span class="res-bad">Missing left-hand operand.</span></td></tr>
+      <tr><td><code>- 4</code></td><td><span class="res-ok">에러 아님</span> — <code>-</code>는 단항 부정으로 <code>-4</code></td></tr>
+    </table>
+    <div class="codewrap"><span class="lang">java</span><pre data-lang="java">// primary() 의 "Expect expression." 직전에 끼운다
+if (match(BANG_EQUAL, EQUAL_EQUAL)) { error(previous(),"Missing left-hand operand."); equality();   return null; }
+if (match(GREATER, GREATER_EQUAL, LESS, LESS_EQUAL)) { error(previous(),"Missing left-hand operand."); comparison(); return null; }
+if (match(PLUS)) { error(previous(),"Missing left-hand operand."); term();   return null; }
+if (match(SLASH, STAR)) { error(previous(),"Missing left-hand operand."); factor(); return null; }
+// MINUS 는 제외 — 단항 '-' 로 유효. 단항 '+' 는 없으므로 '+' 는 항상 에러.</pre></div>
+    <p class="small"><code>error(...)</code>를 <b>throw 없이</b> 호출해 보고만 하고, 오른쪽을 마저 파싱해 버린 뒤 <code>null</code>을 반환하는 게 핵심.</p>
+  </div>
+</section>
+
+<!-- ===================== CH7 ===================== -->
+<section class="chapter" id="ch7">
+  <div class="ch-head"><span class="ch-num">7장</span><span class="ch-title">Evaluating Expressions</span></div>
+  <p class="ch-desc">AST를 후위 순회하며 값을 만든다. 동적 타입은 <code>Object</code> + 런타임 캐스트.</p>
+
+  <div class="card" id="ch7-1">
+    <h3><span class="tag essay">논술</span> 7-1. 숫자 외 타입의 비교</h3>
+    <blockquote class="q">다른 타입 비교를 허용하겠는가? 한다면 어떤 쌍을, 어떤 순서로?</blockquote>
+    <p><b>제안:</b> 문자열끼리(사전순)만 허용하고 혼합 타입은 런타임 에러로 막는다.</p>
+    <table class="cmp">
+      <tr><th>언어</th><th>혼합 타입 비교 <code>3 &lt; "pancake"</code></th></tr>
+      <tr><td><b>Python 3</b></td><td><span class="res-bad">TypeError</span> — 막는다</td></tr>
+      <tr><td><b>JavaScript</b></td><td><span class="res-warn">강제 변환</span> → <code>NaN</code> 비교 → 항상 false (직관 어긋남)</td></tr>
+      <tr><td><b>제안(Lox)</b></td><td><span class="res-ok">문자열↔문자열만 허용</span>, 나머지 에러</td></tr>
+    </table>
+    <div class="codewrap"><span class="lang">java</span><pre data-lang="java">case LESS:
+  if (left instanceof Double && right instanceof Double) return (double)left &lt; (double)right;
+  if (left instanceof String && right instanceof String) return ((String)left).compareTo((String)right) &lt; 0;
+  throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings.");</pre></div>
+  </div>
+
+  <div class="card" id="ch7-2">
+    <h3><span class="tag impl">구현</span> 7-2. 한쪽이 문자열이면 <code>+</code>로 연결</h3>
+    <blockquote class="q"><code>"scone" + 4</code> → <code>scone4</code>. 한쪽이라도 문자열이면 변환해 연결.</blockquote>
+    <div class="codewrap"><span class="lang">java</span><pre data-lang="java">case PLUS:
+  if (left instanceof Double && right instanceof Double) return (double)left + (double)right;
+  if (left instanceof String || right instanceof String) return stringify(left) + stringify(right);
+  throw new RuntimeError(expr.operator, "Operands must be two numbers or two strings.");</pre></div>
+    <p class="small"><code>stringify</code>를 써야 <code>4</code>가 <code>4.0</code>이 아닌 <code>4</code>로 붙는다. <code>||</code>로 하면 <code>true + "!"</code>, <code>nil + "?"</code>까지 연결됨 — 설계 판단.</p>
+  </div>
+
+  <div class="card" id="ch7-3">
+    <h3><span class="tag impl">구현</span> 7-3. 0으로 나누기</h3>
+    <blockquote class="q">지금은 어떻게 되나? 어떻게 되어야 하나? 런타임 에러로 감지·보고하라.</blockquote>
+    <ul class="pts">
+      <li><b>현재</b>: <code>Double</code> 나눗셈 → IEEE 754. <code>1/0</code>=<code>Infinity</code>, <code>0/0</code>=<code>NaN</code>. 조용히 흘러나감.</li>
+      <li><b>다른 언어</b>: C=UB, Java(정수)=ArithmeticException, Python=ZeroDivisionError.</li>
+    </ul>
+    <div class="codewrap"><span class="lang">java</span><pre data-lang="java">case SLASH:
+  checkNumberOperands(expr.operator, left, right);
+  if ((double)right == 0) throw new RuntimeError(expr.operator, "Division by zero.");
+  return (double)left / (double)right;</pre></div>
+    <div class="note"><b>klox</b>에 구현됨 — <code>SLASH</code> 분기에서 <code>divisor == 0.0</code>이면 <code>RuntimeError("Division by zero.")</code>.</div>
+  </div>
+</section>
+
+<!-- ===================== CH8 ===================== -->
+<section class="chapter" id="ch8">
+  <div class="ch-head"><span class="ch-num">8장</span><span class="ch-title">Statements and State</span></div>
+  <p class="ch-desc">문장(효과)과 상태(변수). Environment에 이름→값을 담는다.</p>
+
+  <div class="card" id="ch8-1">
+    <h3><span class="tag impl">구현</span> 8-1. REPL에서 문장·표현식 모두 받기</h3>
+    <blockquote class="q">문장을 입력하면 실행, 표현식을 입력하면 평가해 값을 보여줘라.</blockquote>
+    <ul class="pts">
+      <li>REPL 한 줄을 <b>문장으로 파싱</b>해 보고, 세미콜론 없이 끝나면 <b>표현식</b>으로 간주.</li>
+      <li>문법은 그대로 — 파서의 <b>동작 모드</b>(<code>allowExpression</code>)만 토글.</li>
+    </ul>
+    <div class="codewrap"><span class="lang">java</span><pre data-lang="java">private Stmt expressionStatement() {
+  Expr expr = expression();
+  if (allowExpression && isAtEnd()) foundExpression = true;   // ; 없이 끝 → 표현식
+  else consume(SEMICOLON, "Expect ';' after expression.");
+  return new Stmt.Expression(expr);
+}
+// REPL: 반환이 Expr 면 평가해 출력, List&lt;Stmt&gt; 면 실행</pre></div>
+  </div>
+
+  <div class="card" id="ch8-2">
+    <h3><span class="tag impl">구현</span> 8-2. 초기화 안 된 변수 접근을 런타임 에러로</h3>
+    <blockquote class="q"><code>nil</code> 자동 초기화 대신, 초기화·할당된 적 없는 변수를 읽으면 런타임 에러.</blockquote>
+    <p class="small"><code>null</code>은 Lox의 <code>nil</code>이라 못 쓴다 → <b>센티넬 객체</b>로 "미할당"을 표시.</p>
+    <div class="codewrap"><span class="lang">kotlin</span><pre data-lang="kotlin">// Environment
+companion object { val UNINITIALIZED = Any() }      // 미할당 표식
+
+// Interpreter
+override fun visitVarStmt(stmt: Stmt.Var) {
+  val value = if (stmt.initializer != null) evaluate(stmt.initializer)
+              else Environment.UNINITIALIZED         // var a; → 센티넬
+  environment.define(stmt.name.lexeme, value)
+}
+private fun lookUpVariable(name: Token, expr: Expr): Any? {
+  val value = if (locals[expr] != null) environment.getAt(locals[expr]!!, name.lexeme)
+              else globals.get(name)
+  if (value === Environment.UNINITIALIZED)
+    throw RuntimeError(name, "Unassigned variable '${'$'}{name.lexeme}'.")
+  return value
+}</pre></div>
+    <table class="cmp">
+      <tr><th>코드</th><th>결과</th></tr>
+      <tr><td><code>var a; print a;</code></td><td><span class="res-bad">Unassigned variable 'a'.</span></td></tr>
+      <tr><td><code>var a; a = 5; print a;</code></td><td><span class="res-ok">5</span> (할당하면 센티넬이 덮임)</td></tr>
+      <tr><td><code>var a = 0; print a;</code></td><td><span class="res-ok">0</span></td></tr>
+    </table>
+    <div class="note"><b>klox</b>에 구현·검증 완료.</div>
+  </div>
+
+  <div class="card" id="ch8-3">
+    <h3><span class="tag essay">논술</span> 8-3. 가림 초기화 <code>var a = a + 2;</code></h3>
+    <blockquote class="q"><code>var a = 1; { var a = a + 2; print a; }</code> — 무엇을, 왜?</blockquote>
+    <p><b>책(jlox 8장) 답: <span class="res-ok">3</span>.</b> 초기화식 <code>a + 2</code>가 평가될 때 안쪽 <code>a</code>는 아직 등록 전이라 바깥 <code>a</code>(=1)를 본다 → 3을 안쪽 <code>a</code>로 정의.</p>
+    <p class="small">갈림길은 단 하나: <b>초기화식의 이름이 바깥을 보느냐, 선언 중인 안쪽을 보느냐.</b></p>
+    <table class="cmp">
+      <tr><th>언어</th><th>결과</th><th>이유</th></tr>
+      <tr><td><b>Lox(jlox 8장) · Rust · Scheme <code>let</code></b></td><td><span class="res-ok">3</span></td><td>초기화식이 바깥 바인딩을 본다(Rust=섀도잉, Scheme let=바깥 스코프)</td></tr>
+      <tr><td><b>C</b></td><td><span class="res-warn">미정의(쓰레기값)</span></td><td>선언자 이후 이름이 스코프에 들어와 자기 자신을 참조</td></tr>
+      <tr><td><b>Java</b></td><td><span class="res-bad">컴파일 에러</span></td><td>"초기화되지 않았을 수 있음"</td></tr>
+      <tr><td><b>JavaScript <code>let</code></b></td><td><span class="res-bad">ReferenceError</span></td><td>TDZ — 선언 전 접근 금지</td></tr>
+      <tr><td><b>Python</b></td><td>대응 안 됨</td><td>블록 스코프 없음(함수 안이면 <code>UnboundLocalError</code>)</td></tr>
+    </table>
+    <div class="note">이 레포는 11장 <b>Resolver</b>를 갖춰, 자기참조 초기화를 <b>컴파일 에러</b>(<i>"Can't read local variable in its own initializer."</i>)로 막는다 → klox에서 이 프로그램은 <span class="res-bad">3이 아니라 컴파일 에러</span>.</div>
+  </div>
+</section>
+
+<!-- ===================== CH9 ===================== -->
+<section class="chapter" id="ch9">
+  <div class="ch-head"><span class="ch-num">9장</span><span class="ch-title">Control Flow</span></div>
+  <p class="ch-desc">if · 논리연산 · while · for. 여기서 Lox는 튜링 완전해진다.</p>
+
+  <!-- 9-1 -->
+  <div class="card" id="ch9-1">
+    <h3><span class="tag essay">논술</span> 9-1. 분기 없이 분기하기</h3>
+    <blockquote class="q">1급 함수 + 동적 디스패치만으로 조건부 실행을 구현하라. 이 기법을 쓰는 언어를 대라.</blockquote>
+    <p>분기를 <b>데이터에 대한 디스패치</b>로 바꾼다. <b>동적 디스패치되는 건 <code>condition</code></b>이고, <code>then</code>/<code>else</code>는 디스패처에게 건네는 인자(후보)일 뿐이다.</p>
+    <ul class="pts">
+      <li><b>인터페이스</b> = <code>condition</code> (계약 타입의 참조)</li>
+      <li><b>구현체</b> = <code>true</code>(첫째 선택) / <code>false</code>(둘째 선택)</li>
+      <li><b>디스패치 대상</b> = <code>condition</code> · <b>인자</b> = <code>thenFn</code>, <code>elseFn</code></li>
+    </ul>
+
+    <div class="demo" id="dispDemo">
+      <div class="demo-bar">
+        <span class="dt"><span class="dot"></span>동적 디스패치 — <code>condition(thenFn, elseFn)</code></span>
+        <div class="seg" id="dispCond">
+          <button data-c="true" class="on">condition = true</button>
+          <button data-c="false">condition = false</button>
+        </div>
+        <button class="btn" id="dispRun">▶ 메시지 보내기</button>
+      </div>
+      <div class="demo-stage">
+        <div class="disp-grid">
+          <div class="obj cond" id="dispObj">
+            <div class="role">receiver (인터페이스)</div>
+            <div class="val" id="dispVal">true</div>
+            <div class="small" id="dispImpl">구현체: 첫째 인자를 고름</div>
+          </div>
+          <div class="arrow" id="dispArrow">→</div>
+          <div class="branches">
+            <div class="branch" id="brThen"><div class="role" style="text-align:left">thenFn (인자)</div><div class="bn">fun() { print "T"; }</div></div>
+            <div class="branch" id="brElse"><div class="role" style="text-align:left">elseFn (인자)</div><div class="bn">fun() { print "F"; }</div></div>
+          </div>
+        </div>
+        <div class="term" id="dispTerm" style="margin-top:14px"></div>
+        <div class="cap" id="dispCap"></div>
+      </div>
+    </div>
+
+    <p class="small" style="margin-top:14px">처치 불리언을 Lox로 인코딩 — 이 레포에서 <code>T</code>/<code>F</code> 출력 확인:</p>
+    <div class="codewrap"><span class="lang">lox</span><pre data-lang="lox">fun makeTrue()  { fun choose(thenFn, elseFn) { return thenFn(); } return choose; }  // 첫째
+fun makeFalse() { fun choose(thenFn, elseFn) { return elseFn(); } return choose; }  // 둘째
+fun ifElse(condition, thenFn, elseFn) { return condition(thenFn, elseFn); }         // 위임
+ifElse(makeTrue(),  sayT, sayF);   // T
+ifElse(makeFalse(), sayT, sayF);   // F</pre></div>
+    <div class="codewrap"><span class="lang">smalltalk</span><pre data-lang="smalltalk">"if 가 문법이 아니라 메시지 — receiver 의 클래스가 분기를 결정"
+(n &gt; 0) ifTrue: [ 'pos' ] ifFalse: [ 'neg' ].
+max := (a &gt; b) ifTrue: [ a ] ifFalse: [ b ].   "값을 돌려받는 표현식"
+(x ~= 0) and: [ (10 / x) &gt; 1 ].                 "블록=지연계산 → 단락평가(0 나눗셈 회피)"
+[ i &lt; 10 ] whileTrue: [ i := i + 1 ].           "반복마저 블록 receiver 에 보내는 메시지"</pre></div>
+    <p class="small"><b>언어</b>: <b>Smalltalk</b>(<code>ifTrue:ifFalse:</code>). 람다 계산법의 처치 불리언도 같은 원리(<code>true = λa.λb.a</code>).</p>
+  </div>
+
+  <!-- 9-2 -->
+  <div class="card" id="ch9-2">
+    <h3><span class="tag essay">논술</span> 9-2. 함수만으로 반복하기</h3>
+    <blockquote class="q">반복도 재귀로 만들 수 있는데, 어떤 최적화가 전제되어야 하나? 왜? 그런 언어를 대라.</blockquote>
+    <p><b>답: 꼬리 호출 최적화(TCO).</b> 같은 팩토리얼을 세 가지로 — 차이는 <b>"호출이 끝난 뒤 할 일이 남았는가"</b> 하나뿐이다.</p>
+    <div class="codewrap"><span class="lang">kotlin</span><pre data-lang="kotlin">fun factRec(n: Int): Long =                       // ② 일반 재귀
+    if (n &lt;= 1) 1L else n * factRec(n - 1)        // 곱셈이 호출 "뒤"에 남음 → 꼬리 아님
+
+tailrec fun factIter(n: Int, acc: Long = 1L): Long = // ③ 꼬리 재귀
+    if (n &lt;= 1) acc else factIter(n - 1, acc * n)  // 호출이 "마지막 동작" → 꼬리</pre></div>
+
+    <div class="demo" id="stackDemo">
+      <div class="demo-bar">
+        <span class="dt"><span class="dot"></span>스택에서 벌어지는 일 — 프로세스의 모양</span>
+        <div class="seg" id="stackMode">
+          <button data-m="rec" class="on">② 일반 재귀</button>
+          <button data-m="iter">③ 꼬리 재귀</button>
+        </div>
+        <button class="btn" id="stackStep">▶ 한 단계</button>
+        <button class="btn" id="stackPlay">⏵ 자동</button>
+        <button class="btn ghost" id="stackReset">↺ 리셋</button>
+      </div>
+      <div class="demo-stage">
+        <div class="stack-wrap">
+          <div>
+            <div class="stack-col" id="stackCol"></div>
+            <div class="cap" id="stackCap">factRec(5) — 한 단계씩 진행해 보세요.</div>
+          </div>
+          <div class="gauge">
+            <div class="lbl">스택 프레임</div>
+            <div class="big" id="stackDepth">0</div>
+            <div class="bars" id="stackBars"></div>
+            <div class="lbl" style="margin-top:10px">메모리</div>
+            <div class="big" id="stackBig" style="font-size:20px">—</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="small">③의 모양은 <code>while</code> 루프와 글자 그대로 같다 — <b>TCO란 ③을 기계적으로 루프로 바꾸는 변환</b>. <b>Kotlin</b> <code>tailrec</code>(컴파일 시 검증·변환), <b>Scheme</b>(표준이 TCO 의무화). TCO 없는 런타임(JVM 기본, <b>klox</b>)에선 ③도 스택 오버플로 → 그래서 내장 <code>while</code>이 필요하다.</p>
+  </div>
+
+  <!-- 9-3 -->
+  <div class="card" id="ch9-3">
+    <h3><span class="tag impl">구현</span> 9-3. <code>break</code> 문 추가</h3>
+    <blockquote class="q">루프 안에서 쓰는 <code>break</code>를 추가하라. 루프 밖 <code>break</code>는 막아야 한다.</blockquote>
+    <ul class="pts">
+      <li><b>파싱</b>: <code>loopDepth</code>로 루프 안인지 추적 → 밖이면 파싱 단계에서 에러. 함수 본문 진입 시 0으로 리셋.</li>
+      <li><b>실행</b>: <code>BreakException</code>을 던지고 <code>visitWhileStmt</code>가 catch. <code>for</code>는 <code>while</code>로 디슈가되니 자동 처리.</li>
+    </ul>
+    <div class="codewrap"><span class="lang">kotlin</span><pre data-lang="kotlin">private fun breakStatement(): Stmt {
+  val keyword = previous()
+  if (loopDepth == 0) error(keyword, "Must be inside a loop to use 'break'.")
+  consume(SEMICOLON, "Expect ';' after 'break'.")
+  return Stmt.Break(keyword)
+}
+override fun visitWhileStmt(stmt: Stmt.While) {
+  try { while (isTruthy(evaluate(stmt.condition))) execute(stmt.body) }
+  catch (_: BreakException) { /* 가장 안쪽 루프 탈출 */ }
+}</pre></div>
+
+    <div class="demo" id="breakDemo">
+      <div class="demo-bar">
+        <span class="dt"><span class="dot"></span>break 루프 실행기</span>
+        <button class="btn" id="breakStep">▶ 한 단계</button>
+        <button class="btn" id="breakPlay">⏵ 자동</button>
+        <button class="btn ghost" id="breakReset">↺</button>
+      </div>
+      <div class="demo-stage">
+        <div class="codewrap" style="margin-top:0"><span class="lang">lox</span><pre data-lang="lox">for (var i = 0; i &lt; 10; i = i + 1) {
+  if (i == 3) break;
+  print i;
+}</pre></div>
+        <div class="loop-grid" style="margin-top:12px">
+          <div>
+            <div class="small" style="margin-bottom:6px">반복 (i)</div>
+            <div class="iters" id="breakIters"></div>
+          </div>
+          <div>
+            <div class="statebox" id="breakState"></div>
+            <div class="term" id="breakTerm" style="margin-top:10px"></div>
+          </div>
+        </div>
+        <div class="cap" id="breakCap"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div>klox · Crafting Interpreters 6–9장 챌린지 풀이 · 단일 파일 인터랙티브 발표 자료</div>
+  <div class="legend">
+    <span><i class="sw" style="background:#6366f1"></i>구현체 / 활성</span>
+    <span><i class="sw" style="background:#10b981"></i>선택된 가지 · O(1)</span>
+    <span><i class="sw" style="background:#ef4444"></i>에러 / break</span>
+  </div>
+</footer>
+
+<script>
+/* ============ syntax highlight (per-lang, string/comment safe) ============ */
+function hl(src, lang){
+  const cfg = {
+    smalltalk:{quoteComment:'"', str:"'"},
+    java:{line:'//', block:['/*','*/'], str:'"'},
+    kotlin:{line:'//', block:['/*','*/'], str:'"'},
+    lox:{line:'//', block:['/*','*/'], str:'"'},
+    c:{line:'//', block:['/*','*/'], str:'"'},
+  }[lang] || {};
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let out='', i=0, n=src.length;
+  const span=(cls,t)=>'<span class="'+cls+'">'+esc(t)+'</span>';
+  while(i<n){
+    const ch=src[i], two=src.substr(i,2);
+    if(cfg.quoteComment && ch===cfg.quoteComment){
+      let j=i+1; while(j<n && src[j]!==cfg.quoteComment) j++;
+      out+=span('c', src.slice(i,Math.min(j+1,n))); i=j+1; continue;
+    }
+    if(cfg.line && two===cfg.line){
+      let j=i; while(j<n && src[j]!=='\n') j++;
+      out+=span('c', src.slice(i,j)); i=j; continue;
+    }
+    if(cfg.block && two===cfg.block[0]){
+      let j=src.indexOf(cfg.block[1], i+2); if(j<0)j=n; else j+=2;
+      out+=span('c', src.slice(i,j)); i=j; continue;
+    }
+    if(cfg.str && ch===cfg.str){
+      let j=i+1; while(j<n){ if(src[j]==='\\'){j+=2;continue;} if(src[j]===cfg.str){j++;break;} j++; }
+      out+=span('s', src.slice(i,j)); i=j; continue;
+    }
+    out+=esc(ch); i++;
+  }
+  // keyword bolding (outside spans only — applied by splitting on existing spans)
+  const kws = /\b(fun|val|var|return|if|else|while|for|class|override|tailrec|companion|object|case|new|throw|private|public|true|false|nil|null|instanceof|Int|Long|Object|Token|Expr|Stmt)\b/g;
+  out = out.split(/(<span class="[cs]">.*?<\/span>)/g).map(part=>{
+    if(part.startsWith('<span')) return part;
+    return part.replace(kws, '<span class="k">$1</span>');
+  }).join('');
+  return out;
+}
+document.querySelectorAll('pre[data-lang]').forEach(pre=>{
+  pre.innerHTML = hl(pre.textContent, pre.getAttribute('data-lang'));
+});
+
+/* ============ scrollspy ============ */
+const spy = [...document.querySelectorAll('nav .tabs a[data-spy]')];
+const secs = spy.map(a=>document.getElementById(a.dataset.spy));
+const io = new IntersectionObserver(es=>{
+  es.forEach(e=>{ if(e.isIntersecting){
+    const id=e.target.id; spy.forEach(a=>a.classList.toggle('active', a.dataset.spy===id));
+  }});
+},{rootMargin:'-45% 0px -50% 0px'});
+secs.forEach(s=>s && io.observe(s));
+
+/* ============ 6-1 comma evaluator ============ */
+(function(){
+  const term=document.getElementById('commaTerm'), cap=document.getElementById('commaCap');
+  let expr='a = 1, b = 2, c = 3', parts=[], idx=0;
+  function parse(e){
+    // split top-level commas (no nested parens handling needed for our samples beyond one)
+    return e.split(',').map(s=>s.trim());
+  }
+  function render(){
+    let html='<span class="muted">klox&gt;</span> '+expr+'\n';
+    parts.forEach((p,k)=>{
+      if(k<idx){ const last=(k===parts.length-1);
+        html += (last? '<span class="out">  ↳ '+p+'  → 값으로 채택</span>' : '<span class="muted">  ↳ '+p+'  → 평가 후 버림</span>')+'\n';
+      }
+    });
+    if(idx>=parts.length && parts.length){ html+='<span class="out">= '+parts[parts.length-1].split('=').pop().trim()+'</span>'; }
+    term.innerHTML=html;
+    cap.textContent = idx>=parts.length ? '콤마는 좌→우로 줄지어 평가하고, 마지막 피연산자만 전체 값이 된다.' :
+      '다음 단계: '+(parts[idx]||'')+(idx<parts.length-1?' 를 평가하고 버린다':' 를 평가해 값으로 채택');
+  }
+  function reset(){ parts=parse(expr); idx=0; render(); }
+  document.getElementById('commaStep').onclick=()=>{ if(idx<parts.length){idx++; render();} };
+  document.getElementById('commaReset').onclick=reset;
+  document.querySelectorAll('#commaPick button').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('#commaPick button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); expr=b.dataset.x; reset();
+  });
+  reset();
+})();
+
+/* ============ 9-1 dynamic dispatch ============ */
+(function(){
+  let cond=true;
+  const val=document.getElementById('dispVal'), impl=document.getElementById('dispImpl'),
+        arrow=document.getElementById('dispArrow'), term=document.getElementById('dispTerm'),
+        cap=document.getElementById('dispCap'), thenB=document.getElementById('brThen'), elseB=document.getElementById('brElse');
+  function setCond(c){
+    cond=c; val.textContent=c?'true':'false';
+    impl.textContent='구현체: '+(c?'첫째 인자를 고름':'둘째 인자를 고름');
+    thenB.className='branch'; elseB.className='branch'; arrow.className='arrow'; arrow.textContent='→';
+    term.innerHTML=''; cap.textContent='';
+  }
+  document.querySelectorAll('#dispCond button').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('#dispCond button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); setCond(b.dataset.c==='true');
+  });
+  document.getElementById('dispRun').onclick=()=>{
+    const fire = cond? thenB : elseB, skip = cond? elseB : thenB;
+    fire.className='branch fire'; skip.className='branch skip';
+    arrow.className='arrow '+(cond?'up':'down'); arrow.textContent= cond?'↗':'↘';
+    const r = cond?'T':'F';
+    term.innerHTML='<span class="muted">klox&gt;</span> ifElse('+(cond?'makeTrue()':'makeFalse()')+', sayT, sayF);\n<span class="out">'+r+'</span>';
+    cap.innerHTML='<b>condition</b>('+(cond?'true':'false')+')에 메시지 도착 → 그 구현이 <b>'+(cond?'thenFn':'elseFn')+'</b>를 골라 실행 → <b>'+r+'</b>. '+
+      '디스패치된 건 condition이고, then/else는 그저 후보 인자였다.';
+  };
+  setCond(true);
+})();
+
+/* ============ 9-2 tail-call stack ============ */
+(function(){
+  const N=5;
+  const col=document.getElementById('stackCol'), depthEl=document.getElementById('stackDepth'),
+        barsEl=document.getElementById('stackBars'), bigEl=document.getElementById('stackBig'),
+        capEl=document.getElementById('stackCap');
+  let mode='rec', steps=[], p=0, timer=null;
+
+  function buildRec(){
+    const s=[]; let frames=[];
+    for(let i=N;i>=1;i--){
+      frames=frames.concat([{fn:'factRec('+i+')', pend: i>1? i+' * ◻': 'base = 1', cls:'active'}]);
+      const snap=frames.map((f,k)=>({...f, cls: k===frames.length-1?'active':''}));
+      s.push({frames:snap, cap: i>1? 'factRec('+i+') 호출 — "'+i+' *"를 보류하고 더 내려간다':'factRec(1) = 1 (바닥). 이제 거꾸로 곱하며 줄어든다', depth:frames.length});
+    }
+    let prod=1;
+    for(let j=1;j<=N;j++){
+      prod = j===1?1: j*prod;
+      const remain=N-j;
+      const snap=[];
+      for(let b=0;b<remain;b++) snap.push({fn:'factRec('+(N-b)+')', pend:(N-b)+' * ◻', cls:''});
+      // show the just-resolved frame on top as 'done' briefly
+      snap.push({fn:'factRec('+j+')', pend:'= '+prod, cls:'done'});
+      s.push({frames:snap, cap:'factRec('+j+') = '+(j===1?'1':j+' × '+(prod/j)+' = '+prod)+' → 프레임 pop', depth:remain+1, popped:true});
+    }
+    s.push({frames:[{fn:'factRec(5)', pend:'= 120', cls:'done'}], cap:'최종 결과 120. 펼침→줄어듦으로 O(n) 프레임을 썼다.', depth:1, done:true});
+    return s;
+  }
+  function buildIter(){
+    const s=[]; let nn=N, acc=1, ghosts=[];
+    s.push({frames:[{fn:'factIter('+nn+', '+acc+')', pend:'시작', cls:'active'}], cap:'factIter(5, 1) — 상태가 인자 (n, acc)에 다 들어있다', depth:1, ghosts:[]});
+    while(nn>1){
+      ghosts=[{fn:'factIter('+nn+', '+acc+')', pend:'버려짐', cls:'ghost'}].concat(ghosts).slice(0,3);
+      acc=acc*nn; nn=nn-1;
+      s.push({frames:[{fn:'factIter('+nn+', '+acc+')', pend:'n,acc 갱신', cls:'active'}], ghost:ghosts.slice(),
+        cap:'이전 프레임은 할 일이 없으니 버린다 → (n, acc) = ('+nn+', '+acc+'). 프레임 1개 고정', depth:1});
+    }
+    s[s.length-1].cap='factIter(1, 120) → 120. 펼침/줄어듦 없이 O(1) 메모리 — while 루프와 같은 모양';
+    s[s.length-1].done=true;
+    return s;
+  }
+  function render(){
+    const st=steps[p]||{frames:[],depth:0,cap:''};
+    col.innerHTML='';
+    (st.ghost||[]).slice().reverse().forEach(f=>{ const d=document.createElement('div'); d.className='frame ghost';
+      d.innerHTML='<span class="fn">'+f.fn+'</span><span class="pend">'+f.pend+'</span>'; col.appendChild(d); });
+    st.frames.forEach(f=>{ const d=document.createElement('div'); d.className='frame '+(f.cls||'');
+      d.innerHTML='<span class="fn">'+f.fn+'</span><span class="pend">'+f.pend+'</span>'; col.appendChild(d); });
+    const depth=st.depth||st.frames.length;
+    depthEl.textContent=depth;
+    // bars
+    barsEl.className='bars'+(mode==='iter'?' flat':'');
+    barsEl.innerHTML='';
+    const maxBars = mode==='rec'? Math.max(depth, ...steps.slice(0,p+1).map(x=>x.depth||0)) : 1;
+    const showN = mode==='rec'? Math.max(depth,1) : 1;
+    for(let k=0;k<Math.max(showN,1);k++){ const i=document.createElement('i'); i.style.height=(14+k*8)+'px'; barsEl.appendChild(i); }
+    bigEl.textContent = mode==='rec'? 'O(n)' : 'O(1)';
+    bigEl.style.color = mode==='rec'? 'var(--accent)' : 'var(--ok)';
+    capEl.textContent=st.cap||'';
+  }
+  function reset(){ stop(); steps = mode==='rec'? buildRec(): buildIter(); p=0; render(); }
+  function step(){ if(p<steps.length-1){p++; render();} else stop(); }
+  function stop(){ if(timer){clearInterval(timer); timer=null; document.getElementById('stackPlay').textContent='⏵ 자동';} }
+  document.getElementById('stackStep').onclick=()=>{ stop(); step(); };
+  document.getElementById('stackPlay').onclick=()=>{
+    if(timer){stop();return;}
+    document.getElementById('stackPlay').textContent='⏸ 멈춤';
+    timer=setInterval(()=>{ if(p>=steps.length-1){stop();return;} step(); }, 720);
+  };
+  document.getElementById('stackReset').onclick=reset;
+  document.querySelectorAll('#stackMode button').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('#stackMode button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on'); mode=b.dataset.m; reset();
+  });
+  reset();
+})();
+
+/* ============ 9-3 break loop runner ============ */
+(function(){
+  const itersEl=document.getElementById('breakIters'), stateEl=document.getElementById('breakState'),
+        termEl=document.getElementById('breakTerm'), capEl=document.getElementById('breakCap');
+  let steps=[], p=0, timer=null;
+  function build(){
+    const s=[]; let printed=[];
+    for(let i=0;i<10;i++){
+      // condition check
+      if(i===3){
+        s.push({i, action:'check', cond:true, brk:true, printed:printed.slice(),
+          cap:'i == 3 → break! BreakException 을 던져 가장 안쪽 while 의 catch 로 탈출'});
+        s.push({i, action:'done', brk:true, printed:printed.slice(), stop:true,
+          cap:'루프 종료. 출력은 0 1 2. for 는 while 로 디슈가되어 같은 catch 가 처리한다.'});
+        break;
+      }
+      printed=printed.concat([i]);
+      s.push({i, action:'print', printed:printed.slice(),
+        cap:'i = '+i+' < 10 참 → print '+i+' → 증감 i = '+(i+1)});
+    }
+    return s;
+  }
+  function render(){
+    const st=steps[p]||{};
+    itersEl.innerHTML='';
+    for(let k=0;k<10;k++){
+      const d=document.createElement('div'); d.className='it';
+      if((st.printed||[]).includes(k)) d.className+=' printed';
+      if(st.brk && k===3) d.className+=' brk';
+      if(st.i===k && !st.done) d.className+=' cur';
+      d.textContent=k; itersEl.appendChild(d);
+    }
+    stateEl.innerHTML =
+      '<div class="kv"><span>i</span><b>'+(st.i!==undefined?st.i:'—')+'</b></div>'+
+      '<div class="kv"><span>i &lt; 10</span><b>'+(st.action==='done'?'—':'true')+'</b></div>'+
+      '<div class="kv"><span>action</span><b>'+({print:'print i',check:'break',done:'(exit)'}[st.action]||'—')+'</b></div>'+
+      '<div class="kv"><span>loopDepth</span><b>'+(st.action==='done'?0:1)+'</b></div>';
+    const outs=(st.printed||[]);
+    termEl.innerHTML='<span class="muted">출력&gt;</span> <span class="out">'+(outs.join(' ')||'')+'</span>'+(st.brk?'   <span style="color:#f08a8a">‹ break ›</span>':'');
+    capEl.textContent=st.cap||'';
+  }
+  function reset(){ stop(); steps=build(); p=0; render(); }
+  function step(){ if(p<steps.length-1){p++; render(); if(steps[p].stop) stop();} else stop(); }
+  function stop(){ if(timer){clearInterval(timer);timer=null; document.getElementById('breakPlay').textContent='⏵ 자동';} }
+  document.getElementById('breakStep').onclick=()=>{ stop(); step(); };
+  document.getElementById('breakPlay').onclick=()=>{
+    if(timer){stop();return;}
+    document.getElementById('breakPlay').textContent='⏸ 멈춤';
+    timer=setInterval(()=>{ if(p>=steps.length-1){stop();return;} step(); }, 760);
+  };
+  document.getElementById('breakReset').onclick=reset;
+  reset();
+})();
+</script>
+</body>
+</html>
