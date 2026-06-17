@@ -1,6 +1,6 @@
-# 연습문제 풀이 — 6장 & 7장
+# 연습문제 풀이 — 6 ~ 9장
 
-*Crafting Interpreters*의 6장(Parsing Expressions)과 7장(Evaluating Expressions) 끝에 있는 챌린지 풀이.
+*Crafting Interpreters*의 6장(Parsing Expressions), 7장(Evaluating Expressions), 8장(Statements and State), 9장(Control Flow) 끝에 있는 챌린지 풀이.
 모든 코드는 책의 jlox(Java) 기준이며, 각 장 진도까지의 코드 상태를 전제로 한다.
 
 ---
@@ -22,6 +22,29 @@
 2. **문자열 `+` 변환** — 한쪽 피연산자가 문자열이면 다른 쪽을 문자열로 변환해 연결하도록 `+`를 확장하라. 예: `"scone" + 4` → `scone4`.
 
 3. **0으로 나누기** — 지금 0으로 나누면 어떻게 되는가? 어떻게 되어야 하는가? 다른 언어들은 어떻게 처리하는가? `visitBinaryExpr()`에서 런타임 에러로 감지·보고하도록 고쳐라.
+
+### 8장 · Statements and State
+
+1. **REPL에서 표현식도 평가** — REPL이 문장과 표현식을 둘 다 받게 하라. 문장을 입력하면 실행하고, 표현식을 입력하면 평가해 그 결과값을 출력한다.
+
+2. **초기화 안 된 변수 접근을 에러로** — 변수를 암묵적으로 `nil`로 초기화하는 대신, 초기화·할당된 적 없는 변수를 읽으면 런타임 에러가 나게 하라.
+
+3. **가림 초기화의 동작** — 아래 프로그램은 무엇을 하는가? 무엇을 기대했는가? 왜 그렇게 동작하는가?
+   ```
+   var a = 1;
+   {
+     var a = a + 2;
+     print a;
+   }
+   ```
+
+### 9장 · Control Flow
+
+1. **분기 없는 분기** — 1급 함수와 동적 디스패치만으로 조건부 실행을 구현할 수 있음을 보여라. 이 방식을 제어 흐름에 쓰는 언어를 하나 대라.
+
+2. **함수만으로 반복** — 같은 도구로 반복도 구현할 수 있는데, 인터프리터의 어떤 최적화가 전제되어야 하는가? 왜 필요한가? 이 방식으로 반복하는 언어를 하나 대라.
+
+3. **`break` 문 추가** — 대부분의 C 계열 언어에 있는 `break` 문을 루프 안에서 쓸 수 있게 추가하라.
 
 ---
 
@@ -67,7 +90,8 @@ primary    → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
 ### 콤마 연산자 예시
 
 ```
-1 = 2, 3 * 4     →  (1 + 2)를 평가해 버리고, (3 * 4) = 12 를 반환
+1, 2 == 3
+1 == 2, 3 * 4     →  (1 + 2)를 평가해 버리고, (3 * 4) = 12 를 반환
 "a", "b", "c"    →  앞의 둘을 버리고 "c" 를 반환
 1, 2, 3          →  좌결합 ((1, 2), 3) → 최종 3
 (1 + 2, 3) * 4   →  괄호 안 콤마는 3으로 평가 → 3 * 4 = 12
@@ -138,12 +162,20 @@ public Object visitBinaryExpr(Expr.Binary expr) {
 ### 삼항 연산자 예시
 
 ```
-true ? "yes" : "no"      →  "yes"
+true ? 1, 2 == 3 : "no"      →  "yes"
 1 < 2 ? "작다" : "크다"     →  "작다"   (비교가 ? 보다 먼저 묶인다)
 1 ? 2 : 3 ? 4 : 5        →  우결합 1 ? 2 : (3 ? 4 : 5) → 2
 true ? 1 + 1 : 9         →  가운데엔 어떤 표현식이든 올 수 있다 → 2
+
+1 ? 2 : 3 , 2
+1 ? 2 , 4 : 3
+1 ? 2 ? 3 : 4 : 5
 ```
 
+
+
+
+1, 2 ? 3, 5 : 4
 ### 두 질문에 대한 답
 
 - **`?`와 `:` 사이**: 어떤 표현식이든 올 수 있다. 마치 양쪽이 괄호로 묶인 것처럼 취급하므로, 가장 낮은 우선순위(`expression` 전체)까지 허용된다.
@@ -369,3 +401,345 @@ case SLASH:
 ```
 
 `checkNumberOperands`가 먼저 양쪽이 숫자임을 보장하므로, 그 뒤의 캐스트와 0 비교는 안전하다.
+
+---
+
+# 8장 챌린지
+
+## 8-1. REPL에서 문장과 표현식을 모두 받기
+
+> 8장에서 인터프리터를 문장 기반으로 바꾸면서, REPL에 표현식 하나를 입력하면 그 값을 출력해 주던 기능이 사라졌다. 문장과 표현식을 둘 다 받도록 REPL을 고쳐라. 문장을 입력하면 실행하고, 표현식을 입력하면 평가해 결과값을 보여줘라.
+
+### 입력 예시
+
+```
+> 1 + 2          ;  ← 표현식 (세미콜론 없음)  →  3 출력
+> var a = 10;       ← 선언문                  →  출력 없음
+> a * a          ;  ← 표현식                  →  100 출력
+> print a;          ← print 문               →  10 출력
+```
+
+표현식을 입력하면 `print`를 치지 않아도 값이 보이는 게 목표다.
+
+### 풀이
+
+핵심은 **REPL 한 줄을 먼저 문장으로 파싱해 보고, 실패하면 표현식으로 다시 파싱**하는 것이다. 이를 위해 파서에 "표현식 하나만 파싱하는" 진입점을 하나 노출한다.
+
+```java
+// Parser
+Object parseRepl() {
+  allowExpression = true;            // 표현식 단독 허용 모드
+  List<Stmt> statements = new ArrayList<>();
+  while (!isAtEnd()) {
+    statements.add(declaration());
+
+    if (foundExpression) {           // 세미콜론 없는 표현식이었다면
+      Stmt last = statements.get(statements.size() - 1);
+      return ((Stmt.Expression) last).expression;
+    }
+    allowExpression = false;         // 두 번째 줄부터는 일반 문장만
+  }
+  return statements;
+}
+```
+
+`expressionStatement()`에서, 세미콜론 없이 끝(파일 끝)에 닿았고 표현식 모드라면 문장 대신 "표현식이었다"고 표시한다.
+
+```java
+private Stmt expressionStatement() {
+  Expr expr = expression();
+
+  if (allowExpression && isAtEnd()) {
+    foundExpression = true;          // ; 없이 끝 → 표현식으로 간주
+  } else {
+    consume(SEMICOLON, "Expect ';' after expression.");
+  }
+
+  return new Stmt.Expression(expr);
+}
+```
+
+REPL 루프에서는 반환 타입으로 갈래를 탄다.
+
+```java
+private static void run(String source) {
+  Object syntax = new Parser(scan(source)).parseRepl();
+  if (hadError) return;
+
+  if (syntax instanceof List) {
+    interpreter.interpret((List<Stmt>) syntax);   // 문장들: 실행
+  } else if (syntax instanceof Expr) {
+    String result = interpreter.interpret((Expr) syntax);  // 표현식: 평가해 출력
+    if (result != null) System.out.println("= " + result);
+  }
+}
+```
+
+요점: 문법을 바꾸지 않고 **파서의 동작 모드**만 토글한다. 파일을 실행할 때는 `allowExpression`이 꺼져 있으므로 세미콜론을 그대로 강제한다 — REPL에서만 느슨해진다.
+
+---
+
+## 8-2. 초기화되지 않은 변수 접근을 런타임 에러로
+
+> Lox는 변수를 선언만 하면 암묵적으로 `nil`로 초기화한다. 이걸 더 엄격하게 바꿔, 초기화도 할당도 된 적 없는 변수를 읽으면 런타임 에러가 나게 하라.
+
+### 동작 비교
+
+```
+var a;
+print a;        // 현재: nil 출력      →  목표: 런타임 에러 "Unassigned variable 'a'."
+
+var b;
+b = 3;
+print b;        // 할당했으므로 OK → 3
+
+var c = 0;
+print c;        // 초기화했으므로 OK → 0
+```
+
+### 풀이
+
+"선언됐지만 값이 없음"과 "할당돼서 값이 있음"을 구분해야 한다. 가장 깔끔한 방법은 **미할당을 나타내는 센티넬(sentinel) 객체**를 두는 것이다(`null`은 Lox의 `nil`로 이미 쓰이므로 못 쓴다).
+
+```java
+class Environment {
+  private static final Object UNINITIALIZED = new Object();
+  private final Map<String, Object> values = new HashMap<>();
+
+  // 초기화식 없는 var a; 는 UNINITIALIZED 로 정의
+  void define(String name, Object value) {
+    values.put(name, value);
+  }
+
+  Object get(Token name) {
+    if (values.containsKey(name.lexeme)) {
+      Object value = values.get(name.lexeme);
+      if (value == UNINITIALIZED) {
+        throw new RuntimeError(name,
+            "Unassigned variable '" + name.lexeme + "'.");
+      }
+      return value;
+    }
+    if (enclosing != null) return enclosing.get(name);
+    throw new RuntimeError(name,
+        "Undefined variable '" + name.lexeme + "'.");
+  }
+  // assign 은 그대로 — 값을 넣으면 더 이상 UNINITIALIZED 가 아니게 된다
+}
+```
+
+인터프리터의 `visitVarStmt`는 초기화식이 없을 때 `nil`이 아니라 센티넬을 넣는다.
+
+```java
+@Override
+public Void visitVarStmt(Stmt.Var stmt) {
+  Object value = Environment.UNINITIALIZED;
+  if (stmt.initializer != null) {
+    value = evaluate(stmt.initializer);
+  }
+  environment.define(stmt.name.lexeme, value);
+  return null;
+}
+```
+
+이제 선언만 된 변수를 *읽으면* 에러, 한 번이라도 *할당하면* 정상이다. "정의되지 않음(Undefined)"과 "할당 안 됨(Unassigned)"을 다른 메시지로 구분한 점에 주목하라.
+
+---
+
+## 8-3. 가림 초기화 `var a = a + 2;`의 동작
+
+> 다음 프로그램은 무엇을 하는가? 무엇을 기대했는가? 왜 그렇게 동작하는가?
+>
+> ```
+> var a = 1;
+> {
+>   var a = a + 2;
+>   print a;
+> }
+> ```
+
+### 답: `3`을 출력한다
+
+블록 안 `var a = a + 2;`는 두 단계로 처리된다.
+
+1. **초기화식 `a + 2`를 먼저 평가**한다. 이 시점에는 안쪽 `a`가 아직 환경에 등록되지 않았으므로, 이름 `a`는 **바깥 스코프의 `a`(=1)**를 가리킨다. → `1 + 2 = 3`.
+2. 그 결과 `3`을 **새 안쪽 변수 `a`**로 정의한다.
+
+그래서 `print a`는 안쪽 `a`인 `3`을 출력한다.
+
+```
+[전역]  a = 1
+블록 진입:
+  var a = a + 2;
+    1) RHS 평가:  a + 2  →  바깥 a(1) + 2  =  3
+    2) 안쪽 a 정의:  a = 3
+  print a  →  안쪽 a  →  3
+```
+
+### 무엇이 헷갈리는가
+
+직관적으로 두 가지를 기대할 수 있다.
+
+- **`3`** — RHS의 `a`가 바깥 변수를 본다(현재 jlox 8장 동작).
+- **에러 또는 `nil`** — RHS의 `a`가 *지금 선언 중인* 안쪽 변수를 본다면, 그건 아직 값이 없으니 자기 자신을 참조하는 꼴이다.
+
+문제는 이 동작이 **구현 디테일(언제 변수를 환경에 등록하는가)에 따라 달라진다**는 점이다. 그래서 책은 이 모호함을 11장(Resolving and Binding)에서 정면으로 다룬다. 거기서는 "초기화식 안에서 자기 자신을 참조하는 것"을 **정적(컴파일) 에러**로 막아, 어느 쪽이든 헷갈릴 여지를 아예 없앤다.
+
+> 이 레포의 `Resolver`가 바로 그 장치다. `visitVariableExpr`에서 `scopes.peek()[name] == false`(선언됐지만 정의 전)이면 *"Can't read local variable in its own initializer."* 에러를 낸다.
+
+---
+
+# 9장 챌린지
+
+## 9-1. 분기 없이 분기하기
+
+> 몇 장 뒤에 Lox가 1급 함수와 동적 디스패치를 지원하게 되면, 분기문을 언어에 내장하지 않아도 된다. 그 도구들만으로 조건부 실행을 구현할 수 있음을 보여라. 이 기법을 제어 흐름에 쓰는 언어를 하나 대라.
+
+### 아이디어
+
+조건문을 **데이터에 대한 디스패치**로 바꾼다. 핵심은 "두 가지(참/거짓) 동작을 각각 함수로 싸 두고, 불리언 값이 그중 하나를 고르게" 하는 것이다.
+
+Smalltalk의 방식이 정확히 이렇다. `Boolean`이 추상 클래스고, `True`와 `False`가 그 하위 클래스다. `ifTrue:ifFalse:`라는 메시지를 보내면 동적 디스패치가 알아서 갈래를 탄다.
+
+```
+True  >> ifTrue: t ifFalse: f   →  t value     (참이면 첫째 블록 실행)
+False >> ifTrue: t ifFalse: f   →  f value     (거짓이면 둘째 블록 실행)
+```
+
+즉 `if`라는 **문법**이 없어도, `true`와 `false`가 서로 다른 객체이고 같은 메시지에 다르게 반응한다는 사실만으로 분기가 된다. 의사 Lox로 흉내 내면:
+
+```
+fun ifTrue(condition, thenFn, elseFn) {
+  return condition(thenFn, elseFn);   // condition 자체가 둘 중 하나를 고름
+}
+```
+
+- **언어 예시**: **Smalltalk**(메시지 `ifTrue:ifFalse:`). Lambda Calculus의 처치 불리언(Church boolean)도 같은 원리다(`true = λa.λb.a`, `false = λa.λb.b`).
+
+---
+
+## 9-2. 함수만으로 반복하기
+
+> 같은 도구(1급 함수)로 반복도 만들 수 있는데, 그러려면 인터프리터가 중요한 최적화 하나를 지원해야 한다. 그게 무엇이고 왜 필요한가? 이 방식으로 반복하는 언어를 하나 대라.
+
+### 답: 꼬리 호출 최적화 (Tail Call Optimization)
+
+반복을 **재귀**로 표현한다. `while`을 자기 자신을 다시 부르는 함수로 바꾼다.
+
+```
+fun loop(i) {
+  if (i < 10) {
+    print i;
+    loop(i + 1);     // 꼬리 위치에서 자기 자신 재귀
+  }
+}
+loop(0);
+```
+
+문제는, 호출마다 스택 프레임이 쌓인다는 것이다. 10번이면 괜찮지만 백만 번 반복하면 **스택 오버플로**가 난다. 진짜 반복처럼 쓰려면 이 재귀가 스택을 늘리지 않아야 한다.
+
+**꼬리 호출 최적화**가 그 해법이다. 함수의 **마지막 동작이 다른 호출**이면(꼬리 위치), 현재 프레임은 더 쓸 일이 없으니 새 프레임을 쌓는 대신 **현재 프레임을 재사용**한다. 그러면 재귀 깊이가 아무리 깊어도 스택이 일정하게 유지돼, 반복과 똑같이 동작한다.
+
+- **왜 필요한가**: 이것이 없으면 재귀 기반 반복이 메모리를 선형으로 먹고 결국 터진다. 최적화가 있어야 비로소 재귀가 "공짜 반복"이 된다.
+- **언어 예시**: **Scheme**(언어 표준이 꼬리 호출 최적화를 *의무화*한다). 그래서 Scheme에는 내장 반복문이 굳이 필요 없다.
+
+---
+
+## 9-3. `break` 문 추가
+
+> 대부분의 C 계열 언어는 `break`와 `continue`로 루프를 빠져나간다. `break` 문을 추가하라.
+
+### 잡아내려는 것
+
+```
+for (var i = 0; i < 10; i = i + 1) {
+  if (i == 3) break;     // 3에서 루프 탈출
+  print i;
+}
+// 출력: 0 1 2
+
+break;                   // 루프 밖의 break → 컴파일 에러로 막아야 함
+```
+
+### 풀이
+
+세 부분이다: 문법·파싱, 루프 밖 사용 차단, 그리고 실행 시 탈출.
+
+**1) 문법과 파싱.** `break`는 키워드와 `;`뿐인 문장이다.
+
+```
+statement → exprStmt | forStmt | ifStmt | printStmt
+          | whileStmt | block | breakStmt ;
+breakStmt → "break" ";" ;
+```
+
+`break`가 루프 *안*에 있는지를 파싱 중에 추적한다. 루프를 파싱하는 동안만 켜지는 카운터를 둔다.
+
+```java
+private int loopDepth = 0;
+
+private Stmt statement() {
+  // ...
+  if (match(BREAK)) return breakStatement();
+  // ...
+}
+
+private Stmt breakStatement() {
+  if (loopDepth == 0) {
+    error(previous(), "Must be inside a loop to use 'break'.");
+  }
+  consume(SEMICOLON, "Expect ';' after 'break'.");
+  return new Stmt.Break();
+}
+```
+
+`while`/`for`를 파싱할 때 본문 파싱 전후로 `loopDepth`를 올렸다 내린다(에러가 나도 복구되게 `try/finally`).
+
+```java
+private Stmt whileStatement() {
+  consume(LEFT_PAREN, "Expect '(' after 'while'.");
+  Expr condition = expression();
+  consume(RIGHT_PAREN, "Expect ')' after condition.");
+
+  try {
+    loopDepth++;
+    Stmt body = statement();
+    return new Stmt.While(condition, body);
+  } finally {
+    loopDepth--;
+  }
+}
+```
+
+이렇게 하면 루프 밖의 `break`는 **파싱 단계에서** 걸러진다.
+
+**2) 실행 시 탈출.** 인터프리터에서 `break`를 만나면 여러 단계의 트리 워킹 호출을 한 번에 빠져나와야 한다. 이건 자바 **예외**로 스택을 되감는 게 가장 자연스럽다(6장 동기화와 같은 수법).
+
+```java
+private static class BreakException extends RuntimeException {}
+
+@Override
+public Void visitBreakStmt(Stmt.Break stmt) {
+  throw new BreakException();
+}
+```
+
+루프 실행부에서 이 예외를 잡아 루프만 끝낸다.
+
+```java
+@Override
+public Void visitWhileStmt(Stmt.While stmt) {
+  try {
+    while (isTruthy(evaluate(stmt.condition))) {
+      execute(stmt.body);
+    }
+  } catch (BreakException ex) {
+    // break: 이 루프를 정상 종료
+  }
+  return null;
+}
+```
+
+`for`는 9.5의 디슈가링 덕분에 결국 `Stmt.While`이 되므로, **`while`의 catch 하나로 `for`의 `break`까지 공짜로 처리**된다. 중첩 루프에서도 예외는 가장 가까운(가장 안쪽) `while`의 catch에 잡히므로, "가장 안쪽 루프만 탈출"이라는 의미가 자동으로 지켜진다.
+
+> `continue`도 같은 틀이다. `ContinueException`을 던지고, 루프 본문 실행을 감싼 안쪽에서 잡아 *증감식으로 건너뛰면* 된다(`for`라면 증감식을 반드시 실행해야 하므로 본문만 감싸는 위치가 중요하다).
