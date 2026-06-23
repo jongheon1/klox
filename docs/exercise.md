@@ -1,6 +1,6 @@
-# 연습문제 풀이 — 6 ~ 9장
+# 연습문제 풀이 — 6 ~ 11장
 
-*Crafting Interpreters*의 6장(Parsing Expressions), 7장(Evaluating Expressions), 8장(Statements and State), 9장(Control Flow) 끝에 있는 챌린지 풀이.
+*Crafting Interpreters*의 6장(Parsing Expressions), 7장(Evaluating Expressions), 8장(Statements and State), 9장(Control Flow), 10장(Functions), 11장(Resolving and Binding) 끝에 있는 챌린지 풀이.
 모든 코드는 책의 jlox(Java) 기준이며, 각 장 진도까지의 코드 상태를 전제로 한다.
 
 ---
@@ -45,6 +45,24 @@
 2. **함수만으로 반복** — 같은 도구로 반복도 구현할 수 있는데, 인터프리터의 어떤 최적화가 전제되어야 하는가? 왜 필요한가? 이 방식으로 반복하는 언어를 하나 대라.
 
 3. **`break` 문 추가** — 대부분의 C 계열 언어에 있는 `break` 문을 루프 안에서 쓸 수 있게 추가하라.
+
+### 10장 · Functions
+
+1. **인자 개수 검사 비용** — 우리 인터프리터는 호출마다 인자 개수가 매개변수 개수와 맞는지 런타임에 검사한다. 이 비용이 매 호출에 든다. Smalltalk 구현에는 이 문제가 없다. 왜인가?
+
+2. **익명 함수(람다)** — 함수 선언은 "함수를 만든다 + 이름에 묶는다" 두 일을 한다. 함수형 코드에서는 이름 없이 곧장 넘기거나 반환하고 싶을 때가 많다. 익명 함수 문법을 추가하라. 표현식 문장 자리에 익명 함수가 오는 까다로운 경우(`fun () {};`)는 어떻게 처리하는가?
+
+3. **매개변수와 지역 변수의 스코프** — `fun scope(a) { var a = "local"; }`는 유효한가? 즉 매개변수와 지역 변수는 같은 스코프인가, 바깥 스코프인가? Lox는 어떻게 하는가? 다른 언어는? 어떻게 해야 한다고 보는가?
+
+### 11장 · Resolving and Binding
+
+1. **함수 이름의 즉시 정의** — 다른 변수는 초기화가 끝나기 전엔 못 쓰게 하면서, 함수 이름은 왜 즉시(eager) 정의해도 안전한가?
+
+2. **초기화식의 자기 참조** — `var a = "outer"; { var a = a; }` 같은 코드를 다른 언어들은 어떻게 다루는가(런타임 에러? 컴파일 에러? 허용?)? 전역과 지역을 다르게 취급하는가? 그 선택에 동의하는가?
+
+3. **사용되지 않은 지역 변수 경고** — 선언만 되고 한 번도 쓰이지 않는 지역 변수를 Resolver가 에러로 보고하도록 확장하라.
+
+4. **인덱스 기반 환경** — Resolver가 변수의 스코프 거리는 계산하지만, 그 안에서는 여전히 이름으로(맵) 찾는다. 각 지역 변수에 슬롯 인덱스를 부여하고, 인터프리터가 배열 인덱스로 빠르게 접근하게 만들어 성능을 측정하라.
 
 ---
 
@@ -645,73 +663,9 @@ ifTrue: trueBlock ifFalse: falseBlock
 (n > 0)
     ifTrue:  [ Transcript show: 'positive' ]
     ifFalse: [ Transcript show: 'non-positive' ].
-
-"한쪽 가지만 — ifTrue: / ifFalse: 단독"
-list isEmpty ifTrue:  [ ^nil ].
-found        ifFalse: [ self keepSearching ].
-
-"표현식처럼 값을 돌려받기"
-max := (a > b) ifTrue: [ a ] ifFalse: [ b ].
-
-"단락 평가도 같은 틀 — and:/or: 가 '블록'을 받아 필요할 때만 평가"
-(x ~= 0) and: [ (10 / x) > 1 ].   "왼쪽이 false면 블록을 아예 평가하지 않음 → 0 나눗셈 회피"
-(x = 0)  or:  [ (10 / x) > 1 ].
-
-"nil 검사도 메시지 — UndefinedObject>>ifNil: 로 디스패치"
-config ifNil: [ Config default ] ifNotNil: [ :c | c load ].
-
-"반복마저 분기와 똑같은 수법 — whileTrue: 는 블록 receiver에 보내는 메시지"
-[ i < 10 ] whileTrue: [ Transcript show: i printString. i := i + 1 ].
-```
-
-### 한 줄씩 뜯어보기
-
-위 예시들의 공통 골격은 **"receiver가 분기를 결정하고, 인자로 넘긴 블록은 *지연된* 후보 계산"**이라는 것이다.
-
-- `(n > 0) ifTrue: [..] ifFalse: [..]` — `n > 0`이 먼저 평가돼 `true`/`false` **객체**가 되고, 그 객체가 receiver로서 `ifTrue:ifFalse:`를 받는다. 클래스(`True`/`False`)에 따라 한쪽 블록에만 `value`가 간다. `if` 문은 어디에도 없다.
-- `list isEmpty ifTrue: [ ^nil ]` — 인자가 하나뿐인 `ifTrue:`. `False`의 `ifTrue:`는 블록을 무시하고 `nil`을 반환하도록 구현돼 있어, 거짓일 때 자연히 아무 일도 안 일어난다.
-- `max := (a > b) ifTrue: [ a ] ifFalse: [ b ]` — 블록이 값을 내므로 `ifTrue:ifFalse:` 전체가 **표현식**처럼 값을 낸다. 고른 블록의 `value` 결과가 `max`에 들어간다(삼항 `?:`와 같은 역할).
-- `(x ~= 0) and: [ (10 / x) > 1 ]` — 단락 평가의 핵심. `and:`는 값이 아니라 **블록**을 받는다. receiver가 `false`면 `False>>and:`가 블록을 *평가하지 않고* 곧장 `false`를 반환한다. 그래서 `x = 0`이어도 `10 / x`가 실행되지 않는다. 인자가 "이미 계산된 값"이 아니라 "지연된 계산(블록)"이라는 점이 단락 평가를 가능케 한다.
-- `config ifNil: [..] ifNotNil: [..]` — 디스패치 대상이 Boolean이 아니라 `nil`이다. `nil`은 `UndefinedObject`의 인스턴스라 `ifNil:`을 일반 객체와 다르게 구현한다. "분기 = 메시지 디스패치"가 Boolean을 넘어 모든 객체로 일반화되는 것.
-- `[ i < 10 ] whileTrue: [ .. ]` — receiver가 **블록** `[ i < 10 ]` 자체다. `BlockClosure>>whileTrue:`는 자기(조건 블록)를 `value`로 평가해 참이면 본문 블록을 실행하고 자신을 다시 호출한다. 반복마저 메시지 + 블록 + 재귀로 환원된다 — 바로 다음 9-2의 주제로 이어진다.
-
-### 의사 Lox로 흉내 내기
-
-즉 `if`라는 **문법**이 없어도, `true`와 `false`가 서로 다른 객체이고 같은 메시지에 다르게 반응한다는 사실만으로 분기가 된다. Lox에는 불리언이 이미 내장이라, 흉내를 내려면 먼저 `true`/`false`를 **"두 후보 중 하나를 고르는 객체"**로 직접 인코딩한다(1급 함수 + 클로저로).
-
-```
-// true / false 를 '고르는 법이 다른 두 구현체'로 만든다
-fun makeTrue() {
-  fun choose(thenFn, elseFn) { return thenFn(); }   // 첫째를 고름
-  return choose;
-}
-fun makeFalse() {
-  fun choose(thenFn, elseFn) { return elseFn(); }   // 둘째를 고름
-  return choose;
-}
-
-// if/else 자리: condition 에게 '골라줘' 하고 위임할 뿐
-fun ifElse(condition, thenFn, elseFn) {
-  return condition(thenFn, elseFn);
-}
-
-fun sayT() { print "T"; }
-fun sayF() { print "F"; }
-
-ifElse(makeTrue(),  sayT, sayF);   // T
-ifElse(makeFalse(), sayT, sayF);   // F
 ```
 
 ### 무엇이 동적 디스패치되는가 (인터페이스로 보기)
-
-인터페이스/구현체 구도가 맞다. 다만 역할을 정확히 짚어야 한다 — **디스패치되는 건 `condition`이고, `thenFn`·`elseFn`은 디스패치 대상이 아니라 그냥 인자(후보)다.**
-
-- **인터페이스 = `condition`**: "두 후보 중 하나를 골라 실행한다"는 *하나의 계약*. `condition` 변수는 그 계약 타입의 참조다.
-- **구현체 = `true`와 `false`**: 같은 계약을 다르게 구현한 두 객체. `true`는 첫째를, `false`는 둘째를 고른다.
-- **디스패치 대상 = `condition`(= receiver)**: `condition(thenFn, elseFn)`을 호출하는 순간, condition의 실제 정체(true냐 false냐)가 어느 구현을 실행할지 결정한다. 이게 `if`를 대체하는 분기다.
-- **`thenFn`·`elseFn` = 인자**: 디스패처(condition)에게 건네는 두 선택지일 뿐. 골라지는 입장이지, 고르는 주체가 아니다.
-
-Java 인터페이스로 옮기면 한눈에 보인다.
 
 ```java
 interface Cond { Object select(Supplier<Object> thenFn, Supplier<Object> elseFn); }
@@ -746,7 +700,7 @@ fun factLoop(n: Int): Long {
 }
 
 // ── ② 일반 재귀 (재귀적 프로세스) ──
-fun factRec(n: Int): Long =
+tailrec fun factRec(n: Int): Long =
     if (n <= 1) 1L
     else n * factRec(n - 1)          // 곱셈이 호출 "뒤"에 남는다
 
@@ -803,21 +757,13 @@ factIter(1, 120)  → 120
    프레임을 재사용하면 O(1) 메모리
 ```
 
-③의 모양은 ①의 while 루프와 글자 그대로 똑같다 — `(n, acc)`가 ①의 변수 `(i, acc)`이고, 한 줄 내려가는 게 루프 한 바퀴다. 그래서 **꼬리 호출 최적화(TCO)란 ③을 기계적으로 ①로 바꾸는 변환**일 뿐이다. SICP가 "반복적 프로세스를 재귀로 표현했다"고 부른 게 이거다.
+③의 모양은 ①의 while 루프와 글자 그대로 똑같다 — `(n, acc)`가 ①의 변수 `(i, acc)`이고, 한 줄 내려가는 게 루프 한 바퀴다. 그래서 **꼬리 호출 최적화(TCO)란 ③을 기계적으로 ①로 바꾸는 변환**일 뿐이다.
 
 ### 런타임 현실: 그래서 진짜로 O(1)이 되나
 
 여기서 챌린지의 "중요한 최적화"가 갈린다. ③이 O(1)인 건 **런타임이 TCO를 해줄 때만**이다.
 
 - **Kotlin** — `tailrec` 키워드가 컴파일 시점에 ③을 ①(루프)로 바꿔준다. 그래서 `factIter(1_000_000)`도 멀쩡히 돈다. 보너스로 ②에 `tailrec`을 붙이면 컴파일러가 "꼬리 호출이 없다"고 경고하고 일반 재귀로 컴파일한다 — 즉 컴파일러가 "이게 진짜 꼬리 재귀냐"를 검증해준다.
-- **Scheme** — 언어 표준이 TCO를 *의무화*한다. 그래서 Scheme엔 내장 반복문이 없어도 된다. 모든 반복을 꼬리 재귀로 쓰고, 그게 자동으로 O(1)이다. (챌린지의 "이 방식으로 반복하는 언어" 답)
-- **TCO 없는 런타임**(기본 JVM 호출, 그리고 우리의 klox) — ③도 ②처럼 프레임이 쌓여 결국 스택 오버플로다. 그래서 klox에서 반복을 함수로만 구현하려면, 인터프리터의 함수 호출이 꼬리 위치를 인식해 **현재 프레임/환경을 재사용**하도록 고쳐야 한다. 이 최적화가 없기 때문에 9.4의 `while` 같은 내장 반복문이 필요한 것이다.
-
-### 요약
-
-- **무엇**: 꼬리 호출 최적화(TCO). 꼬리 위치의 호출에서 새 프레임을 쌓지 않고 현재 프레임을 재사용한다.
-- **왜 필요**: 없으면 재귀 기반 반복이 O(n) 스택을 먹고 스택 오버플로로 터진다. 있어야 재귀가 진짜 "공짜 반복"이 된다.
-- **언어**: **Scheme**(표준이 TCO 의무화). Kotlin은 `tailrec`으로 함수 단위 opt-in 제공.
 
 ---
 
@@ -921,3 +867,371 @@ public Void visitWhileStmt(Stmt.While stmt) {
 > 이 레포(klox)에 위 설계를 그대로 구현했다. `break` 키워드 토큰(`BREAK`)과 `Stmt.Break` 노드를 추가하고, 파서는 `loopDepth`로 루프 밖 `break`를 파싱 단계에서 막는다. 인터프리터는 `BreakException`을 던지고 `visitWhileStmt`가 잡는다. **함수**가 있는 레포라서 한 가지를 더 처리했다 — 함수 본문을 파싱할 때 `loopDepth`를 0으로 리셋(끝나면 복원)한다. 그래야 루프 안에 정의된 함수 본문의 `break`(그 함수 입장에선 루프 밖)가 제대로 에러가 된다.
 
 > `continue`도 같은 틀이다. `ContinueException`을 던지고, 루프 본문 실행을 감싼 안쪽에서 잡아 *증감식으로 건너뛰면* 된다(`for`라면 증감식을 반드시 실행해야 하므로 본문만 감싸는 위치가 중요하다).
+
+---
+
+# 10장 챌린지
+
+## 10-1. 인자 개수 검사 비용 — Smalltalk엔 왜 없나
+
+> 우리 인터프리터는 함수에 넘어온 인자 개수가 매개변수 개수와 맞는지 꼼꼼히 검사한다. 이 검사가 매 호출마다 런타임에 일어나므로 실제 성능 비용이 있다. Smalltalk 구현에는 이 문제가 없다. 왜인가?
+
+### 우리 구현의 비용
+
+`visitCallExpr`는 모든 호출에서 다음을 돈다.
+
+```java
+if (arguments.size() != function.arity()) {
+  throw new RuntimeError(expr.paren, "Expected " +
+      function.arity() + " arguments but got " + arguments.size() + ".");
+}
+```
+
+호출이 일어날 때마다 정수 비교 한 번. 작지만 **런타임에, 매번** 치르는 비용이다.
+
+### Smalltalk가 이 비용을 안 내는 이유
+
+핵심은 **인자 개수가 메서드 이름(셀렉터, selector) 자체에 박혀 있다**는 데 있다. Smalltalk의 키워드 메시지는 콜론마다 인자 자리가 하나씩 대응한다.
+
+```smalltalk
+dict at: key put: value      "셀렉터 = at:put:  → 인자 정확히 2개"
+collection do: aBlock         "셀렉터 = do:      → 인자 정확히 1개"
+```
+
+`at:put:`이라는 셀렉터는 **문법적으로 인자 두 개를 동반할 때만 만들어진다**. 인자를 하나만 적으면 그건 셀렉터 `at:put:`가 아니라 다른(혹은 불완전한) 메시지라 애초에 파싱 단계에서 갈린다. 즉 "셀렉터가 곧 arity"라서, **개수가 맞는지는 컴파일 시점에 이미 결정**된다.
+
+런타임에 할 일은 "이 receiver의 클래스에 이 셀렉터에 해당하는 메서드가 있나"라는 메서드 룩업뿐이고, 셀렉터를 찾았다는 건 곧 개수가 맞았다는 뜻이다. 개수 불일치는 별도 검사가 아니라 **"메시지를 이해 못 함(`doesNotUnderstand:`)"**으로 자연히 흡수된다. Lox는 인자 목록과 함수 이름이 분리돼 있어(`f(1, 2)`의 `f`와 `2`가 따로) 런타임에 따로 맞춰 봐야 하는 것과 대조된다.
+
+> 정리: Smalltalk는 arity를 **이름에 인코딩**해 정적으로 보장한다. 우리 Lox는 이름과 인자 개수가 독립이라 런타임 검사가 불가피하다. (C/Java 같은 정적 타입 언어도 같은 검사를 *컴파일 시점*으로 옮겨 런타임 비용을 없앤다.)
+
+---
+
+## 10-2. 익명 함수(람다) 추가
+
+> 함수 선언은 "함수를 만든다"와 "이름에 묶는다" 두 가지를 한다. 함수형 스타일에선 이름 없이 만들어 곧장 넘기고 싶을 때가 많다. 익명 함수 문법을 추가해 다음이 되게 하라. 그리고 표현식 문장 자리에 익명 함수가 오는 까다로운 경우를 어떻게 다룰지 설명하라.
+
+```
+fun thrice(fn) {
+  for (var i = 1; i <= 3; i = i + 1) {
+    fn(i);
+  }
+}
+
+thrice(fun (a) {       // 이름 없는 함수를 인자로
+  print a;
+});
+// 1 2 3
+```
+
+### 풀이
+
+익명 함수는 **이름이 없는 함수**, 즉 값을 만드는 **표현식**이다. 선언문(`Stmt.Function`)과 달리 식이 필요하다. 두 가지 접근이 있다.
+
+**접근 A — `Stmt.Function`을 재사용하고 본문 파싱만 분리.** 책이 권하는 방식은, `function()`에서 "이름 읽기"와 "매개변수+본문 읽기"를 분리해 이름 없는 함수 본체 파서 `functionBody(kind)`를 만들고, 그게 `Expr.Function`(또는 `Stmt.Function`을 감싼 식)을 반환하게 하는 것이다. 여기서는 새 식 노드를 두는 쪽으로 명확히 보인다.
+
+```java
+"Lambda : Token keyword, List<Token> params, List<Stmt> body",  // Expr 노드
+```
+
+`primary()`(혹은 그 근처)에서 `fun`을 만나면 익명 함수 식으로 파싱한다.
+
+```java
+private Expr primary() {
+  // ...
+  if (match(FUN)) return lambda();
+  // ...
+}
+
+private Expr lambda() {
+  Token keyword = previous();                 // 에러 위치용 'fun' 토큰
+  consume(LEFT_PAREN, "Expect '(' after 'fun'.");
+
+  List<Token> parameters = new ArrayList<>();
+  if (!check(RIGHT_PAREN)) {
+    do {
+      if (parameters.size() >= 255) {
+        error(peek(), "Can't have more than 255 parameters.");
+      }
+      parameters.add(consume(IDENTIFIER, "Expect parameter name."));
+    } while (match(COMMA));
+  }
+  consume(RIGHT_PAREN, "Expect ')' after parameters.");
+  consume(LEFT_BRACE, "Expect '{' before lambda body.");
+  List<Stmt> body = block();
+  return new Expr.Lambda(keyword, parameters, body);
+}
+```
+
+런타임에서는 이미 있는 `LoxFunction`을 거의 그대로 쓴다 — 선언문이 아니라 식에서 함수 객체를 만들어 **반환**할 뿐이고, 이름 바인딩 단계가 없다.
+
+```java
+@Override
+public Object visitLambdaExpr(Expr.Lambda expr) {
+  // 이름만 없는 함수. 현재 환경을 클로저로 포획해 함수 객체를 만들어 값으로 돌려준다.
+  return new LoxFunction(expr.params, expr.body, environment);
+}
+```
+
+(이러려면 `LoxFunction`이 `Stmt.Function` 대신 `params`/`body`를 직접 받도록 살짝 일반화하면 깔끔하다. `toString`은 `<fn>` 정도로.)
+
+### 까다로운 경우: `fun () {};` (표현식 문장)
+
+문제는 **선언문 `fun`과 표현식 `fun`이 같은 토큰으로 시작**한다는 점이다. `declaration()`이 `fun`을 보면 곧장 *명명* 함수 선언으로 파싱하려다, 이름이 없으니 *"Expect function name."* 에러를 낸다 — 익명 함수를 식으로 보기도 전에.
+
+해결은 **한 토큰 더 내다보는 것**이다. `fun` 다음이 식별자면 선언문, `(`면 표현식(익명 함수)이다.
+
+```java
+private Stmt declaration() {
+  // fun 뒤에 이름이 오면 선언문, 아니면(= '(') 표현식 문장으로 흘려보낸다
+  if (check(FUN) && checkNext(IDENTIFIER)) {
+    advance();                       // consume 'fun'
+    return function("function");
+  }
+  if (match(VAR)) return varDeclaration();
+  return statement();                // 여기로 오면 fun(...){...} 은 expressionStatement에서 lambda로 파싱됨
+}
+```
+
+`checkNext`는 `tokens.get(current + 1)`을 들여다보는 한 칸짜리 룩어헤드다. 이렇게 하면 `fun () {};`는 표현식 문장으로 가서 `lambda()`가 파싱하고, 만들어진 함수 객체는 아무 데도 안 묶인 채 버려진다 — 부수 효과도 없으니 사실상 무의미한 문장이지만 **문법적으로는 합법**이 된다(자바스크립트의 `(function(){})();` 직전 상태와 비슷한 처지).
+
+> 이 레포(klox)에는 익명 함수가 아직 없다. 위 풀이는 책 기준의 설계이며, 도입한다면 `Expr.Lambda` 노드 추가, `declaration()`의 1토큰 룩어헤드, `LoxFunction`을 `params`/`body`로 일반화하는 세 군데가 손볼 지점이다.
+
+---
+
+## 10-3. 매개변수와 지역 변수의 스코프
+
+> 다음은 유효한 프로그램인가? 즉 함수의 매개변수는 지역 변수와 같은 스코프에 있는가, 바깥 스코프에 있는가?
+>
+> ```
+> fun scope(a) {
+>   var a = "local";
+> }
+> ```
+
+### Lox의 답: 같은 스코프 — 그래서 갈린다
+
+`LoxFunction.call`을 보면, 호출 시 **환경 하나**를 만들어 거기에 매개변수를 정의하고, 그 **같은 환경**에서 본문을 실행한다(본문 블록이 환경을 또 만들지 않는다).
+
+```java
+Environment environment = new Environment(closure);
+// 매개변수를 이 환경에 define
+for (...) environment.define(param.lexeme, argument);
+// 본문도 이 환경에서 실행 — 별도 중첩 없음
+interpreter.executeBlock(declaration.body, environment);
+```
+
+따라서 매개변수 `a`와 본문의 `var a`는 **한 스코프**에 놓인다. 결과는 인터프리터 단독이냐, Resolver가 끼었느냐로 갈린다.
+
+- **10장(인터프리터 단독)**: `var a = "local"`은 같은 환경에서 `a`를 **덮어쓴다**. 에러 없이 유효 — `a`가 `"local"`이 된다.
+- **11장(Resolver 도입 이후, 이 레포)**: 같은 스코프에서 같은 이름을 두 번 선언하는 셈이라 `declare`가 *"Already a variable with this name in this scope."* **컴파일 에러**를 낸다.
+
+이 레포는 Resolver를 갖췄으므로 위 프로그램은 **컴파일 에러**다. `resolveFunction`이 매개변수를 declare/define한 바로 그 스코프에서 본문을 해소하기 때문이다.
+
+```java
+private void resolveFunction(Stmt.Function function) {
+  beginScope();
+  for (Token param : function.params) { declare(param); define(param); }
+  resolve(function.body);     // ← 같은 스코프. 여기서 var a 가 또 declare → 중복 에러
+  endScope();
+}
+```
+
+### 다른 언어들
+
+- **C / Java**: 매개변수와 함수 최상위 지역 변수는 **같은 스코프**로 보아, 같은 이름 재선언을 **컴파일 에러**로 막는다. (Lox 11장과 같은 입장.)
+- **JavaScript**: `function f(a) { var a = 1; }`는 **허용**된다 — `var`가 함수 스코프라 매개변수와 합쳐져 그냥 같은 변수의 재대입이 된다. 단 `let a`로 쓰면 재선언 에러.
+- **Scheme**: 매개변수도 `let` 바인딩과 같은 종류의 지역 바인딩이라, 안쪽 `(let ((a ...)))`로 새로 묶으면 **섀도잉**(별개 스코프)이 된다.
+
+### 어떻게 해야 하나(의견)
+
+매개변수를 본문 지역과 **같은 스코프**로 두고 **재선언을 에러로 막는 쪽**(C/Java/Lox-11장)이 가장 덜 놀랍다. 매개변수를 실수로 가리는 버그를 컴파일 시점에 잡아 주기 때문이다. "조용히 덮어쓰기"(JS의 `var`)는 편하지만 의도치 않은 가림을 숨긴다.
+
+---
+
+# 11장 챌린지
+
+## 11-1. 함수 이름은 왜 즉시 정의해도 안전한가
+
+> 다른 변수는 초기화가 끝나기 전엔 사용을 막으면서(`var a = a;`를 에러로), 함수 이름은 본문 해소 *전에* 즉시 define한다. 왜 함수만 그래도 안전한가?
+
+### 답: 초기화식이 "지금" 실행되지 않기 때문
+
+차이는 **이름이 참조되는 시점**에 있다.
+
+- 일반 변수 `var a = <식>;`의 초기화식 `<식>`은 **선언을 해소(그리고 실행)하는 바로 그 자리에서** 평가된다. 그 안에서 `a`를 읽으면 *아직 값이 없는* 자신을 읽는 것이라 위험하다. 그래서 Resolver는 `a`를 `false`(선언됐으나 미초기화)로 두고, 초기화식 안의 `a`를 에러로 잡는다.
+
+- 함수 `fun f() { ... f() ... }`의 "초기화식"은 함수 본문이지만, 본문은 **선언 시점에 실행되지 않는다**. 한참 뒤 `f`가 **호출될 때** 비로소 실행된다. 그때쯤이면 `f`라는 이름은 이미 완전히 바인딩돼 있다. 즉 본문이 `f`를 보더라도, 보는 순간(호출 시점)엔 `f`가 멀쩡히 정의돼 있다.
+
+그래서 함수 이름을 본문 해소 전에 `define`해 두는 것이다 — 그래야 본문 안의 재귀 호출 `f(...)`가 자기 자신으로 올바르게 **해소**된다(거리 계산이 된다). 만약 변수처럼 `false`로 묶어 두면, 본문 안의 재귀 참조가 "자기 초기화에서 자신을 읽음" 에러로 오인된다 — 재귀가 불가능해진다.
+
+```java
+@Override
+public Void visitFunctionStmt(Stmt.Function stmt) {
+  declare(stmt.name);
+  define(stmt.name);      // ← 본문 해소 전에 define: 재귀 참조를 허용
+  resolveFunction(stmt);
+  return null;
+}
+```
+
+> 한 줄 요약: 변수 초기화식은 **즉시 평가**되므로 자기참조가 위험하지만, 함수 본문은 **나중에 호출될 때** 평가되므로 이름을 먼저 묶어도 안전하고, 오히려 그래야 재귀가 된다.
+
+---
+
+## 11-2. 초기화식의 자기 참조 — 언어별 비교
+
+> `var a = "outer"; { var a = a; }` 같은, 안쪽 초기화식이 자기 이름을 참조하는 코드를 다른 언어들은 어떻게 다루는가? 런타임 에러? 컴파일 에러? 허용? 전역과 지역을 다르게 보는가? 그 선택에 동의하는가?
+
+이건 8-3과 한 뿌리이되, 11장의 초점은 **"안쪽 `a`의 초기화식 속 `a`가 바깥을 보느냐, 자기 자신을 보느냐"**다. 갈림은 언어가 "이름을 언제 스코프에 넣느냐"에 달려 있다.
+
+| 언어 | 지역 `var a = a;`(안쪽 블록) | 전역은? |
+|------|------------------------------|---------|
+| **Lox (jlox 11장 / 이 레포)** | **컴파일 에러** *"Can't read local variable in its own initializer."* | 전역은 허용(추적 안 함) — 바깥 `a`를 읽거나 미정의면 런타임 처리 |
+| **Rust** | 허용 — RHS의 `a`는 *바깥* `a`(섀도잉) | 동일 |
+| **Java** | **컴파일 에러** ("variable a might not have been initialized") | 필드는 규칙이 다름 |
+| **JavaScript (`let`)** | **런타임 ReferenceError** (TDZ) | `let` 전역도 동일하게 TDZ |
+| **JavaScript (`var`)** | 허용 — `a`는 `undefined`로 호이스팅돼 RHS가 `undefined` | 동일 |
+| **C** | 허용하나 **미정의 동작** (초기화 안 된 자기 값) | 동일 |
+| **Scheme `let`** | RHS가 *바깥* 스코프에서 평가 → 바깥 `a` (`let*`면 안쪽) | — |
+
+전역을 다르게 보는 이유: jlox는 전역 스코프를 Resolver가 추적하지 않는다(REPL에서 한 줄씩 재선언·전방 참조를 허용하려는 실용적 타협). 그래서 **같은 코드라도 지역은 컴파일 에러, 전역은 통과**하는 비대칭이 생긴다.
+
+### 이 레포의 실제 동작
+
+```
+var a = "outer";
+{
+  var a = a;        // 컴파일 에러: Can't read local variable in its own initializer.
+}
+```
+
+`Resolver.visitVarStmt`가 `declare`(=false) → 초기화식 해소 → `define`(=true) 순서라, 초기화식 안의 `a`가 `false` 상태로 발견돼 막힌다(`Resolver.kt`의 `visitVariableExpr`).
+
+### 동의하는가
+
+**동의한다.** 지역에서 자기 초기화는 거의 항상 실수(섀도잉하려다 오타, 또는 바깥 값을 쓰려던 의도)다. 의도가 "바깥 값 복사"라면 이름을 다르게(`var a2 = a;`) 쓰면 명확해진다. Rust처럼 "RHS는 바깥을 본다"도 일관되고 좋은 선택이지만, **명시적 에러로 막는 쪽**이 모호함을 가장 확실히 없앤다. C의 미정의 동작이 최악이다.
+
+---
+
+## 11-3. 사용되지 않은 지역 변수 보고
+
+> 선언만 되고 한 번도 읽히지 않는 지역 변수를 Resolver가 에러(경고)로 보고하도록 확장하라.
+
+### 풀이
+
+Resolver는 스코프가 닫힐 때 그 스코프의 모든 이름을 알고 있다. 그러니 **"선언됐는가"에 더해 "쓰였는가"를 추적**하고, 스코프를 `endScope`할 때 안 쓰인 것을 보고하면 된다. `Boolean` 대신 작은 상태 객체로 바꾼다.
+
+```java
+private static class Variable {
+  final Token name;
+  enum State { DECLARED, DEFINED, READ }
+  State state;
+  Variable(Token name, State state) { this.name = name; this.state = state; }
+}
+
+private final Stack<Map<String, Variable>> scopes = new Stack<>();
+```
+
+`declare`/`define`은 상태를 갱신하고, **변수를 읽을 때 `READ`로 표시**한다.
+
+```java
+private void resolveLocal(Expr expr, Token name, boolean isRead) {
+  for (int i = scopes.size() - 1; i >= 0; i--) {
+    if (scopes.get(i).containsKey(name.lexeme)) {
+      interpreter.resolve(expr, scopes.size() - 1 - i);
+      if (isRead) {
+        scopes.get(i).get(name.lexeme).state = Variable.State.READ;  // 사용됨 표시
+      }
+      return;
+    }
+  }
+}
+```
+
+`visitVariableExpr`은 읽기(`isRead = true`)로, `visitAssignExpr`은 쓰기(`isRead = false`)로 부른다 — "할당만 하고 읽지 않은" 변수도 잡고 싶다면 할당은 사용으로 치지 않는다.
+
+스코프를 닫을 때 점검한다.
+
+```java
+private void endScope() {
+  Map<String, Variable> scope = scopes.pop();
+  for (Map.Entry<String, Variable> entry : scope.entrySet()) {
+    if (entry.getValue().state != Variable.State.READ) {
+      Lox.error(entry.getValue().name, "Local variable is never used.");
+    }
+  }
+}
+```
+
+```
+fun f() {
+  var unused = 123;     // Local variable is never used.
+  var used = 1;
+  print used;           // used 는 READ → OK
+}
+```
+
+주의: 전역은 스코프 스택에 없으니 검사 대상이 아니다(REPL에서 흔히 선언만 하므로 적절). 매개변수까지 잡으면 인터페이스를 맞추려 안 쓰는 매개변수가 많아 과하게 시끄러우니, 보통 매개변수는 예외로 둔다.
+
+> 이 레포에는 이 기능이 없다(Resolver는 `Boolean` 맵만 쓴다). 위는 책 기준 확장 설계다.
+
+---
+
+## 11-4. 인덱스 기반 환경 (성능)
+
+> Resolver가 변수의 스코프 거리는 계산하지만, 그 스코프 안에서는 여전히 이름으로(해시맵) 찾는다. 각 지역 변수에 **슬롯 인덱스**를 부여하고, 인터프리터가 **배열 인덱스**로 접근하게 만들어 성능 향상을 측정하라.
+
+### 아이디어
+
+현재 변수 접근은 **(거리, 이름)** → `getAt(distance, name)`이고, 마지막 단계가 `HashMap.get(name)`이다. 해시 계산·충돌 처리 비용이 매 접근에 든다. 이를 **(거리, 인덱스)** → `array[index]`로 바꾸면 상수 시간의 배열 접근이 된다.
+
+### Resolver 쪽: 슬롯 번호 부여
+
+각 스코프에서 변수를 declare할 때 **0부터 증가하는 슬롯 번호**를 매긴다. 변수 사용을 해소할 때 거리뿐 아니라 그 슬롯 번호도 함께 인터프리터에 넘긴다.
+
+```java
+// 스코프: 이름 → 슬롯 인덱스 (선언 순서대로 0,1,2,...)
+private void declare(Token name) {
+  Map<String, Integer> scope = scopes.peek();
+  scope.put(name.lexeme, scope.size());      // size() 가 다음 슬롯 번호
+}
+
+private void resolveLocal(Expr expr, Token name) {
+  for (int i = scopes.size() - 1; i >= 0; i--) {
+    Integer slot = scopes.get(i).get(name.lexeme);
+    if (slot != null) {
+      interpreter.resolve(expr, scopes.size() - 1 - i, slot);   // 거리 + 슬롯
+      return;
+    }
+  }
+}
+```
+
+### 인터프리터 쪽: 맵 대신 배열
+
+`Environment`의 `HashMap<String, Object>`를 `Object[]`(혹은 `ArrayList<Object>`)로 바꾼다. 변수는 이름이 아니라 슬롯 번호로 들고 난다.
+
+```java
+class Environment {
+  final Environment enclosing;
+  private final List<Object> values = new ArrayList<>();   // 이름 대신 인덱스
+
+  Object getAt(int distance, int slot) {
+    return ancestor(distance).values.get(slot);            // 해시 없음, 배열 접근
+  }
+  void setAt(int distance, int slot, Object value) {
+    ancestor(distance).values.set(slot, value);
+  }
+}
+```
+
+`locals` 맵도 `Map<Expr, Integer>`(거리) 외에 슬롯을 함께 저장하도록 확장한다(거리·슬롯 쌍을 담는 작은 레코드, 또는 두 맵).
+
+### 측정
+
+- 변수 접근이 잦은 벤치마크(깊은 재귀 피보나치, 루프 누적 등)를 `clock()`으로 전후 시간 측정한다.
+- 기대: 해시 비용이 사라져 변수 접근이 빨라진다. 다만 **전역은 여전히 맵**(슬롯을 미리 못 정함)이라, 전역 변수 위주 코드에선 차이가 작다.
+- 트레이드오프: 슬롯은 선언 순서에 의존하므로, Resolver와 인터프리터의 슬롯 부여 규칙이 **정확히 일치**해야 한다(둘 중 하나라도 순서가 어긋나면 엉뚱한 변수를 읽는 치명적 버그). 이름 디버깅 정보가 사라지는 비용도 있다.
+
+> 이 레포는 이름 기반 `HashMap` 환경을 쓴다(`Environment.kt`). 위는 clox(2부)가 택하는 방향에 가까운, jlox에서의 인덱스화 설계다.
+
