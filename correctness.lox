@@ -1,0 +1,60 @@
+// Closures + loop variable capture (each iteration a fresh env/slot)
+fun makeCounter() {
+  var i = 0;
+  fun count() { i = i + 1; return i; }
+  return count;
+}
+var c = makeCounter();
+print c(); // 1
+print c(); // 2
+print c(); // 3
+
+// Two independent closures don't share state
+var c2 = makeCounter();
+print c2(); // 1
+print c(); // 4
+
+// Nested shadowing across blocks
+var a = "global";
+{
+  var a = "outer";
+  {
+    var a = "inner";
+    print a; // inner
+  }
+  print a; // outer
+}
+print a; // global
+
+// Reference a sibling function declared earlier in the same scope
+fun outer() {
+  fun second() { return 10; }
+  fun first() { return second() + 1; }
+  return first();
+}
+print outer(); // 11
+
+// Parameters as slots, mixed with locals, multiple params
+fun add3(x, y, z) {
+  var t = x + y;
+  return t + z;
+}
+print add3(1, 2, 3); // 6
+
+// Recursion correctness
+fun fib(n) { if (n < 2) return n; return fib(n - 1) + fib(n - 2); }
+print fib(10); // 55
+
+// for-loop desugaring + block locals
+var total = 0;
+for (var k = 0; k < 5; k = k + 1) { total = total + k; }
+print total; // 10
+
+// Static scope bug fix (the 11.1 example)
+fun showA(x) {
+  fun show() { print x; }
+  show();
+  var x2 = 999;
+  show();
+}
+showA("ok"); // ok ok

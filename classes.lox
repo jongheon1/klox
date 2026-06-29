@@ -1,0 +1,74 @@
+// --- basic class + instance printing ---
+class Bagel {}
+print Bagel;        // Bagel
+print Bagel();      // Bagel instance
+
+// --- fields + methods + this ---
+class Cake {
+  taste() {
+    var adjective = "delicious";
+    print "The " + this.flavor + " cake is " + adjective + "!";
+  }
+}
+var cake = Cake();
+cake.flavor = "German chocolate";
+cake.taste();       // The German chocolate cake is delicious!
+
+// --- init with parameters ---
+class Circle {
+  init(radius) { this.radius = radius; }
+  area() { return 3.14159 * this.radius * this.radius; }
+}
+print Circle(4).area();   // 50.26544
+
+// --- calling init directly returns `this` ---
+class Foo {
+  init() { print "init ran"; }
+}
+var foo = Foo();          // init ran
+print foo.init();         // init ran  THEN  Foo instance
+
+// --- `this` captured by a nested function inside a method ---
+class Thing {
+  getCallback() {
+    fun localFunction() { print this.name; }
+    return localFunction;
+  }
+}
+var t = Thing();
+t.name = "thing-name";
+t.getCallback()();        // thing-name
+
+// --- inheritance + super.method() ---
+class Doughnut {
+  cook() { print "Fry until golden brown."; }
+}
+class BostonCream < Doughnut {
+  cook() {
+    super.cook();
+    print "Pipe full of custard and coat with chocolate.";
+  }
+}
+BostonCream().cook();
+// Fry until golden brown.
+// Pipe full of custard and coat with chocolate.
+
+// --- super resolves against the DEFINING class, not the receiver ---
+class A { method() { print "A method"; } }
+class B < A {
+  method() { print "B method"; }
+  test() { super.method(); }
+}
+class C < B {}
+C().test();               // A method
+
+// --- inherited method (no override) ---
+class D < A {}
+D().method();             // A method
+
+// --- inherited init ---
+class Base {
+  init(x) { this.x = x; }
+}
+class Derived < Base {}
+print Derived(7).x;       // 7

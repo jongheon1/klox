@@ -1,6 +1,6 @@
-# 연습문제 풀이 — 6 ~ 11장
+# 연습문제 풀이 — 6 ~ 13장
 
-*Crafting Interpreters*의 6장(Parsing Expressions), 7장(Evaluating Expressions), 8장(Statements and State), 9장(Control Flow), 10장(Functions), 11장(Resolving and Binding) 끝에 있는 챌린지 풀이.
+*Crafting Interpreters*의 6장(Parsing Expressions), 7장(Evaluating Expressions), 8장(Statements and State), 9장(Control Flow), 10장(Functions), 11장(Resolving and Binding), 12장(Classes), 13장(Inheritance) 끝에 있는 챌린지 풀이.
 모든 코드는 책의 jlox(Java) 기준이며, 각 장 진도까지의 코드 상태를 전제로 한다.
 
 ---
@@ -63,6 +63,20 @@
 3. **사용되지 않은 지역 변수 경고** — 선언만 되고 한 번도 쓰이지 않는 지역 변수를 Resolver가 에러로 보고하도록 확장하라.
 
 4. **인덱스 기반 환경** — Resolver가 변수의 스코프 거리는 계산하지만, 그 안에서는 여전히 이름으로(맵) 찾는다. 각 지역 변수에 슬롯 인덱스를 부여하고, 인터프리터가 배열 인덱스로 빠르게 접근하게 만들어 성능을 측정하라.
+
+### 12장 · Classes
+
+1. **정적 메서드** — 인스턴스가 아니라 클래스 객체에서 바로 부르는 정적(static) 메서드를 추가하라. 메서드 앞에 `class` 키워드를 붙여 표시한다. (힌트: 메타클래스)
+
+2. **게터(getter)** — 매개변수 목록 없이 선언하고, 그 이름의 프로퍼티에 *접근*하는 순간 본문이 실행되는 게터 메서드를 추가하라.
+
+3. **캡슐화** — Python·JS는 객체 필드를 밖에서 자유롭게 접근하게 하고, Ruby·Smalltalk는 상태를 캡슐화한다. Lox는 어느 쪽이며, 만약 바꾼다면 필드와 메서드 이름 충돌을 어떻게 다루겠는가? 트레이드오프와 견해를 논하라.
+
+### 13장 · Inheritance
+
+1. **다른 재사용 메커니즘** — Lox는 단일 상속뿐이다. 믹스인·트레이트·다중 상속 등 다른 재사용 방식 중 하나를 고른다면 무엇을, 왜 택하겠는가? (용감하다면 구현까지)
+
+2. **BETA의 `inner`** — Lox(와 대부분 OOP)는 메서드 탐색을 하위에서 시작해 위로 간다(`super`로 위를 부른다). BETA는 반대로 위에서 시작해 아래로 내려가며, 상위 메서드가 `inner`로 하위를 불러들인다. Lox에 `inner`를 정의·구현하려면 무엇이 필요한가?
 
 ---
 
@@ -917,6 +931,12 @@ fun thrice(fn) {
   }
 }
 
+fun foo(a) {
+    print a;
+};
+
+thrice(foo);
+
 thrice(fun (a) {       // 이름 없는 함수를 인자로
   print a;
 });
@@ -927,7 +947,8 @@ thrice(fun (a) {       // 이름 없는 함수를 인자로
 
 익명 함수는 **이름이 없는 함수**, 즉 값을 만드는 **표현식**이다. 선언문(`Stmt.Function`)과 달리 식이 필요하다. 두 가지 접근이 있다.
 
-**접근 A — `Stmt.Function`을 재사용하고 본문 파싱만 분리.** 책이 권하는 방식은, `function()`에서 "이름 읽기"와 "매개변수+본문 읽기"를 분리해 이름 없는 함수 본체 파서 `functionBody(kind)`를 만들고, 그게 `Expr.Function`(또는 `Stmt.Function`을 감싼 식)을 반환하게 하는 것이다. 여기서는 새 식 노드를 두는 쪽으로 명확히 보인다.
+**접근 A — `Stmt.Function`을 재사용하고 본문 파싱만 분리.** 책이 권하는 방식은, `function()`에서 "이름 읽기"와 "매개변수+본문 읽기"를 분리해 이름 없는 함수 본체 파서 `functionBody(kind)`를 만들고, 
+그게 `Expr.Function`(또는 `Stmt.Function`을 감싼 식)을 반환하게 하는 것이다. 여기서는 새 식 노드를 두는 쪽으로 명확히 보인다.
 
 ```java
 "Lambda : Token keyword, List<Token> params, List<Stmt> body",  // Expr 노드
@@ -1081,18 +1102,19 @@ public Void visitFunctionStmt(Stmt.Function stmt) {
 ## 11-2. 초기화식의 자기 참조 — 언어별 비교
 
 > `var a = "outer"; { var a = a; }` 같은, 안쪽 초기화식이 자기 이름을 참조하는 코드를 다른 언어들은 어떻게 다루는가? 런타임 에러? 컴파일 에러? 허용? 전역과 지역을 다르게 보는가? 그 선택에 동의하는가?
+> `var a = a` 는 런타임에러, `{ var a = a; }` 는 컴파일에러
 
 이건 8-3과 한 뿌리이되, 11장의 초점은 **"안쪽 `a`의 초기화식 속 `a`가 바깥을 보느냐, 자기 자신을 보느냐"**다. 갈림은 언어가 "이름을 언제 스코프에 넣느냐"에 달려 있다.
 
-| 언어 | 지역 `var a = a;`(안쪽 블록) | 전역은? |
-|------|------------------------------|---------|
+| 언어                        | 지역 `var a = a;`(안쪽 블록)                                           | 전역은?                                     |
+|---------------------------|------------------------------------------------------------------|------------------------------------------|
 | **Lox (jlox 11장 / 이 레포)** | **컴파일 에러** *"Can't read local variable in its own initializer."* | 전역은 허용(추적 안 함) — 바깥 `a`를 읽거나 미정의면 런타임 처리 |
-| **Rust** | 허용 — RHS의 `a`는 *바깥* `a`(섀도잉) | 동일 |
-| **Java** | **컴파일 에러** ("variable a might not have been initialized") | 필드는 규칙이 다름 |
-| **JavaScript (`let`)** | **런타임 ReferenceError** (TDZ) | `let` 전역도 동일하게 TDZ |
-| **JavaScript (`var`)** | 허용 — `a`는 `undefined`로 호이스팅돼 RHS가 `undefined` | 동일 |
-| **C** | 허용하나 **미정의 동작** (초기화 안 된 자기 값) | 동일 |
-| **Scheme `let`** | RHS가 *바깥* 스코프에서 평가 → 바깥 `a` (`let*`면 안쪽) | — |
+| **Rust**                  | 허용 — RHS의 `a`는 *바깥* `a`(섀도잉)                                     | 동일                                       |
+| **Java**                  | **컴파일 에러** ("variable a might not have been initialized")        | 필드는 규칙이 다름                               |
+| **JavaScript (`let`)**    | **런타임 ReferenceError** (TDZ)                                     | `let` 전역도 동일하게 TDZ                       |
+| **JavaScript (`var`)**    | 허용 — `a`는 `undefined`로 호이스팅돼 RHS가 `undefined`                    | 동일                                       |
+| **C**                     | 허용하나 **미정의 동작** (초기화 안 된 자기 값)                                   | 동일                                       |
+| **Scheme `let`**          | RHS가 *바깥* 스코프에서 평가 → 바깥 `a` (`let*`면 안쪽)                         | —                                        |
 
 전역을 다르게 보는 이유: jlox는 전역 스코프를 Resolver가 추적하지 않는다(REPL에서 한 줄씩 재선언·전방 참조를 허용하려는 실용적 타협). 그래서 **같은 코드라도 지역은 컴파일 에러, 전역은 통과**하는 비대칭이 생긴다.
 
@@ -1234,4 +1256,231 @@ class Environment {
 - 트레이드오프: 슬롯은 선언 순서에 의존하므로, Resolver와 인터프리터의 슬롯 부여 규칙이 **정확히 일치**해야 한다(둘 중 하나라도 순서가 어긋나면 엉뚱한 변수를 읽는 치명적 버그). 이름 디버깅 정보가 사라지는 비용도 있다.
 
 > 이 레포는 이름 기반 `HashMap` 환경을 쓴다(`Environment.kt`). 위는 clox(2부)가 택하는 방향에 가까운, jlox에서의 인덱스화 설계다.
+
+---
+
+# 12장 챌린지
+
+> 이 레포(klox)에는 12장(클래스)이 실제 구현돼 있다 — `LoxClass`, `LoxInstance`, `Expr.Get/Set/This`, `Stmt.Class`, 메서드 바인딩(`LoxFunction.bind`), `init` 생성자. 아래 풀이들은 그 위에 얹는 확장이며, 별도 표시가 없으면 레포엔 아직 없는 추가 기능이다.
+
+## 12-1. 정적 메서드 (static methods)
+
+> 인스턴스 메서드는 있지만, 클래스 객체에서 바로 부르는 정적 메서드가 없다. 메서드 선언 앞에 `class` 키워드를 붙여 정적 메서드를 표시하고, 클래스 객체에 직접 매달리게 하라.
+
+```
+class Math {
+  class square(n) { return n * n; }    // 정적 메서드
+}
+print Math.square(3);   // 9   — 인스턴스 없이 클래스에서 바로 호출
+```
+
+### 풀이: 메타클래스 (metaclass)
+
+깔끔한 방법은 Smalltalk의 **메타클래스**다. 핵심 통찰: "정적 메서드를 클래스에서 부른다"는 건 "그 클래스를 *인스턴스로 보는* 또 다른 클래스(메타클래스)의 인스턴스 메서드를 부른다"는 것이다. 즉 `LoxClass`가 **그 자체로 `LoxInstance`이기도** 하게 만들면, 12장에서 만든 프로퍼티 조회 메커니즘을 그대로 재사용할 수 있다.
+
+```java
+// LoxClass가 LoxInstance를 상속(혹은 포함)하게 한다.
+class LoxClass extends LoxInstance implements LoxCallable {
+  final LoxClass metaclass;            // 정적 메서드를 담는 클래스
+  // ...
+}
+```
+
+- 파서: 클래스 본문에서 메서드를 읽을 때 앞에 `class`가 오면 **정적 메서드 목록**에 따로 모은다.
+
+```java
+List<Stmt.Function> methods = new ArrayList<>();
+List<Stmt.Function> classMethods = new ArrayList<>();
+while (!check(RIGHT_BRACE) && !isAtEnd()) {
+  boolean isStatic = match(CLASS);                 // 'class' 접두사
+  (isStatic ? classMethods : methods).add(function("method"));
+}
+```
+
+- 인터프리터: 정적 메서드들로 **메타클래스**(`name + " metaclass"`)를 만들고, 그 메타클래스의 인스턴스로 실제 `LoxClass`를 생성한다. 그러면 `Math.square`는 `LoxInstance.get`이 메타클래스에서 메서드를 찾아 바인딩한다 — `this`는 클래스 자신이 된다.
+
+```java
+LoxClass metaclass = new LoxClass(null, name.lexeme + " metaclass", classMethods);
+LoxClass klass     = new LoxClass(metaclass, name.lexeme, methods);
+```
+
+`Math.square(3)`은 `Math`(인스턴스로서)의 `get("square")` → 메타클래스의 `square`를 바인딩 → 호출, 로 흐른다. 12장 코드를 거의 그대로 두 번 쓰는 셈이다.
+
+---
+
+## 12-2. 게터 (getter)
+
+> 매개변수 목록 없이 선언하고, 그 이름의 프로퍼티에 *접근하는 순간* 본문이 실행되는 게터 메서드를 추가하라.
+
+```
+class Circle {
+  init(radius) { this.radius = radius; }
+  area {                                  // 괄호 없음 = 게터
+    return 3.141592653 * this.radius * this.radius;
+  }
+}
+var c = Circle(4);
+print c.area;     // 50.265...   — c.area() 가 아니라 c.area
+```
+
+### 풀이
+
+게터는 "매개변수 목록이 없는 메서드"이고, **`.area` 접근(Get) 시점에 곧바로 호출**된다는 점만 다르다.
+
+- 파서: `function()`에서 `(`가 안 오면 게터로 본다(매개변수 파싱을 건너뛰고 본문만). `Stmt.Function`에 `isGetter`(혹은 `params == null`)를 표시한다.
+
+```java
+private Stmt.Function function(String kind) {
+  Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
+
+  List<Token> parameters = null;
+  if (!kind.equals("method") || check(LEFT_PAREN)) {    // 게터가 아니면 매개변수 파싱
+    consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
+    parameters = new ArrayList<>();
+    if (!check(RIGHT_PAREN)) {
+      do { parameters.add(consume(IDENTIFIER, "Expect parameter name.")); }
+      while (match(COMMA));
+    }
+    consume(RIGHT_PAREN, "Expect ')' after parameters.");
+  }
+  consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
+  List<Stmt> body = block();
+  return new Stmt.Function(name, parameters, body);      // parameters == null 이면 게터
+}
+```
+
+- 인터프리터: `visitGetExpr`에서 찾은 멤버가 게터면 **즉시 호출**해 그 반환값을 돌려준다(바인딩만 하고 끝내지 않는다).
+
+```java
+@Override
+public Object visitGetExpr(Expr.Get expr) {
+  Object object = evaluate(expr.object);
+  if (object instanceof LoxInstance) {
+    Object result = ((LoxInstance) object).get(expr.name);
+    if (result instanceof LoxFunction && ((LoxFunction) result).isGetter()) {
+      return ((LoxFunction) result).call(this, Collections.emptyList());  // 즉시 실행
+    }
+    return result;
+  }
+  throw new RuntimeError(expr.name, "Only instances have properties.");
+}
+```
+
+`area`는 인자 0개로 호출되며, `this`는 `bind`로 이미 묶여 있으므로 `this.radius`가 동작한다.
+
+---
+
+## 12-3. 캡슐화 — 누가 필드에 접근할 수 있나 (논술)
+
+> Python·JS는 객체의 필드를 밖에서 자유롭게 읽고 쓰게 한다. Ruby·Smalltalk는 인스턴스 상태를 캡슐화해 메서드를 통해서만 접근하게 한다. Lox는 어느 쪽이며, 캡슐화한다면 필드·메서드 이름 충돌은 어떻게 다루겠는가? 트레이드오프와 견해를 논하라.
+
+### Lox의 현재 입장
+
+Lox는 **Python·JS 쪽**이다. `instance.field`로 밖에서 자유롭게 읽고, `instance.field = x`로 새 필드까지 추가할 수 있다(`LoxInstance.set`은 무조건 맵에 넣는다). 캡슐화가 없다.
+
+### 캡슐화한다면 — 이름 충돌 문제
+
+Ruby/Smalltalk처럼 "필드는 메서드 본문(=`this`를 통해서만)에서만 접근, 밖에서는 메서드로만"으로 가면 한 가지가 꼬인다: **`this.x` 같은 필드 접근과 `obj.method()` 같은 멤버 접근이 같은 `.` 문법을 공유**한다는 점. 밖에서의 `obj.x`는 필드면 막아야 하고 메서드(혹은 게터)면 허용해야 하니, **이름공간을 나눌지** 결정해야 한다.
+
+- **Ruby**: 필드(`@x`)와 메서드를 **다른 문법(`@` 접두사)**으로 구분한다. 그래서 같은 이름의 필드 `@x`와 메서드 `x`가 공존할 수 있고, 밖에서는 메서드만 보인다. 충돌이 원천적으로 없다.
+- **Smalltalk**: 인스턴스 변수는 메서드 안에서만 보이고, 밖에서는 오직 메시지(메서드). 접근자(`x`, `x:`)를 직접 정의해 노출한다.
+
+Lox에 도입한다면 Ruby식이 깔끔하다 — `this.x`(필드, 내부 전용)와 `obj.x`(메서드, 외부 노출)를 의미상 분리하고, 필드는 밖에서 못 읽게 한다. 그러면 필드와 같은 이름의 게터를 둬도 충돌하지 않는다(밖에선 게터, 안에선 필드).
+
+### 트레이드오프와 견해
+
+- **개방형(현재 Lox/Python/JS)**: 단순하고 유연하다. 메타프로그래밍·직렬화·테스트가 쉽다. 대신 불변식을 강제할 수 없고, 외부가 내부 표현에 결합된다.
+- **캡슐화(Ruby/Smalltalk)**: 불변식 보장·리팩터링 안전성이 크다. 대신 문법(접근자, `@`)이 늘고 보일러플레이트가 생긴다.
+
+견해: **교육용·작은 동적 언어인 Lox라면 현재의 개방형이 적절**하다. 규모가 커지고 라이브러리 경계가 생기면 "관례적 비공개"(파이썬의 `_name`)만으로도 실무엔 충분하다. 강제 캡슐화는 정적 검사(접근 제어자)와 함께 갈 때 가치가 가장 크다.
+
+---
+
+# 13장 챌린지
+
+> 이 레포에는 13장(단일 상속·`super`)도 구현돼 있다(`LoxClass.superclass`/`findMethod`, `Expr.Super`, Resolver의 `SUBCLASS`). 아래는 그 너머의 확장이다.
+
+## 13-1. 다른 재사용 메커니즘 — 무엇을, 왜 (논술 + 스케치)
+
+> Lox는 단일 상속뿐이다. 믹스인·트레이트·다중 상속 등 다른 재사용 방식 중 하나를 고른다면?
+
+후보 비교:
+
+- **다중 상속**: 강력하지만 **다이아몬드 문제**(공통 조상의 중복)와 메서드 충돌 해소(C3 선형화 등)가 복잡하다.
+- **믹스인(mixin)**: 클래스에 메서드 묶음을 "섞어 넣는다". 선형화로 충돌을 순서로 푼다(Ruby `include`, Python MRO). 단일 상속에 얹기 쉽다.
+- **트레이트(trait)**: 상태 없는 메서드 묶음. 충돌을 **명시적으로** 해소(이름 변경·배제)하게 강제해 다이아몬드 모호성을 피한다(Scala, Rust의 트레이트와 결이 비슷).
+
+**선택: 믹스인**. 이유 — Lox의 기존 단일 상속 체인을 거의 건드리지 않고 얹을 수 있고, "동작 재사용"이라는 실용 목표에 충분하다. 상태 충돌 위험은 트레이트(상태 없음)가 더 안전하지만, Lox 메서드는 본문만이라 믹스인으로도 단순하게 간다.
+
+### 스케치
+
+`class C < Base with M1, M2 { ... }` 같은 문법을 두고, **메서드 탐색 순서**를 `C → M2 → M1 → Base`로 선형화한다. `findMethod`가 이 순서대로 훑게 만들면 끝이다.
+
+```java
+// LoxClass: 선형화된 탐색 목록을 미리 만들어 둔다 (C3-ish)
+private final List<LoxClass> mro;   // [C, M2, M1, Base, ...]
+
+LoxFunction findMethod(String name) {
+  for (LoxClass klass : mro) {
+    if (klass.methods.containsKey(name)) return klass.methods.get(name);
+  }
+  return null;
+}
+```
+
+믹스인은 상태(필드)를 안 가지므로 인스턴스 구조엔 영향이 없고, `super`는 "MRO에서 다음 클래스"로 일반화하면 자연스럽게 동작한다.
+
+---
+
+## 13-2. BETA의 `inner`
+
+> Lox(와 대부분 OOP)는 메서드 탐색을 **하위에서 위로** 한다(하위 오버라이드가 이기고, `super`로 위를 부른다). BETA는 반대로 **위에서 아래로** 간다 — 가장 상위 메서드가 먼저 실행되고, 그 안에서 `inner`로 하위 버전을 불러들인다. Lox에 `inner`를 구현하려면?
+
+### 개념 비교
+
+```
+super: 하위가 주도. 하위 메서드 안에서 super.x() 로 상위를 호출. (안→밖으로 부른다)
+inner: 상위가 주도. 상위 메서드가 inner; 로 하위를 호출.        (밖→안으로 부른다)
+```
+
+`inner`는 상위 메서드가 "여기에 하위가 끼어들 자리"를 표시하는 것이다. 하위 오버라이드가 없으면 `inner`는 아무것도 안 한다(no-op).
+
+```
+class Doughnut {
+  cook() {
+    print "Fry until golden brown.";
+    inner;                                   // 하위가 있으면 여기서 실행
+    print "Place on a rack to cool.";
+  }
+}
+class BostonCream < Doughnut {
+  cook() { print "Pipe full of custard."; }
+}
+BostonCream().cook();
+// Fry until golden brown.
+// Pipe full of custard.            ← inner 자리에서 하위 cook 실행
+// Place on a rack to cool.
+```
+
+### 구현에 필요한 것
+
+`super`의 거울상이다. 핵심은 **호출이 항상 가장 상위 정의에서 시작**해야 한다는 것, 그리고 `inner`가 "이 메서드의 *하위* 버전"을 가리켜야 한다는 것.
+
+1. **메서드 디스패치 방향 뒤집기**: `instance.cook()`은 `findMethod`가 찾은 *최상위* 클래스의 `cook`부터 실행해야 한다. 그러려면 탐색을 위에서 아래로 하거나, 같은 이름 메서드들의 **체인**(상위→하위)을 만들어 맨 위부터 부른다.
+
+2. **`inner` 바인딩**: `super`가 클로저에 "상위클래스"를 담았듯, `inner`는 클로저에 **하위(override) 메서드**를 담는다. 메서드를 바인딩할 때 `this`·`super`에 더해 `inner`(다음 하위 메서드, 없으면 no-op)를 환경에 넣는다.
+
+```java
+// 개념적 평가
+@Override
+public Object visitInnerExpr(Expr.Inner expr) {
+  LoxFunction innerMethod = (LoxFunction) environment.getAt(distance, "inner");
+  if (innerMethod == null) return null;            // 하위가 없으면 no-op
+  return innerMethod.call(this, ...);              // 하위 메서드 실행
+}
+```
+
+3. **`Expr.Inner` 노드 + Resolver**: `inner`도 `this`/`super`처럼 가짜 스코프로 해소하고, 클래스 밖 사용을 정적 에러로 막는다.
+
+요약하면 — `inner`는 **방향만 반대인 `super`**다. (a) 디스패치를 최상위 정의에서 시작하도록 바꾸고, (b) 메서드 바인딩 환경에 "하위 메서드" 참조(`inner`)를 심고, (c) `Expr.Inner`를 그 참조의 호출로 평가하면 된다. `super`를 만든 그 기계(클로저에 담아 거리로 꺼내기)를 거울처럼 재사용하는 게 전부다.
 

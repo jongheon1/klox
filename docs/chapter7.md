@@ -226,6 +226,20 @@ private String stringify(Object object) {
      1      2     3
 ```
 
+
+```java
+new Expr.Binary(
+    new Expr.Unary(
+        MINUS,
+        new Expr.Literal(1.0)),
+    PLUS,
+    new Expr.Binary(
+        new Expr.Literal(2.0),
+        STAR,
+        new Expr.Literal(3.0)))
+```
+
+
 `interpret()`가 루트에서 `evaluate()`를 부르면, 각 노드의 `visit...` 메서드가 자식을 먼저 평가한다. 즉 **후위 순회(post-order)** — 잎에서 값이 올라온다. 들여쓰기가 호출 깊이, 화살표가 돌려주는 값이다:
 
 ```

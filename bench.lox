@@ -1,0 +1,35 @@
+// Benchmark for 11-4: stresses local variable access.
+// - fib: heavy function calls + parameter (local) reads
+// - loopSum: tight loop reading/writing function-scope locals across a block boundary
+
+fun fib(n) {
+  if (n < 2) return n;
+  return fib(n - 1) + fib(n - 2);
+}
+
+fun loopSum(n) {
+  var sum = 0;
+  var i = 0;
+  while (i < n) {
+    sum = sum + i;
+    i = i + 1;
+  }
+  return sum;
+}
+
+fun workload() {
+  fib(30);
+  loopSum(2000000);
+}
+
+// Warm up the JIT before timing.
+workload();
+workload();
+
+var run = 0;
+while (run < 5) {
+  var t = clock();
+  workload();
+  print clock() - t;
+  run = run + 1;
+}
