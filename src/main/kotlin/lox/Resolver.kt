@@ -6,11 +6,16 @@ class Resolver(
     private val interpreter: Interpreter
 ) : Expr.Visitor<Unit>, Stmt.Visitor<Unit> {
     private enum class FunctionType {
-       NONE, FUNCTION
+       NONE, FUNCTION, INITIALIZER, METHOD
+    }
+
+    private enum class ClassType {
+       NONE, CLASS, SUBCLASS
     }
 
     private val scopes: Stack<MutableMap<String, Boolean>> = Stack()
     private var currentFunction = FunctionType.NONE
+    private var currentClass = ClassType.NONE
 
     override fun visitBlockStmt(stmt: Stmt.Block) {
         beginScope()
@@ -19,6 +24,40 @@ class Resolver(
     }
 
     override fun visitBreakStmt(stmt: Stmt.Break) {
+    }
+
+    override fun visitClassStmt(stmt: Stmt.Class) {
+        val enclosingClass = currentClass
+        currentClass = ClassType.CLASS
+
+        declare(stmt.name)
+        define(stmt.name)
+
+        if (stmt.superclass != null) {
+            if (stmt.name.lexeme == stmt.superclass.name.lexeme) {
+                Lox.error(stmt.superclass.name, "A class can't inherit from itself.")
+            }
+            currentClass = ClassType.SUBCLASS
+            resolve(stmt.superclass)
+
+            beginScope()
+            scopes.peek()["super"] = true
+        }
+
+        beginScope()
+        scopes.peek()["this"] = true
+
+        for (method in stmt.methods) {
+            val declaration =
+                if (method.name.lexeme == "init") FunctionType.INITIALIZER else FunctionType.METHOD
+            resolveFunction(method, declaration)
+        }
+
+        endScope()
+
+        if (stmt.superclass != null) endScope()
+
+        currentClass = enclosingClass
     }
 
     override fun visitExpressionStmt(stmt: Stmt.Expression) {
@@ -47,6 +86,9 @@ class Resolver(
             Lox.error(stmt.keyword, "Can't return from top-level code.")
         }
         if (stmt.value != null) {
+            if (currentFunction == FunctionType.INITIALIZER) {
+                Lox.error(stmt.keyword, "Can't return a value from an initializer.")
+            }
             resolve(stmt.value)
         }
     }
@@ -110,6 +152,32 @@ class Resolver(
         resolve(expr.condition)
         resolve(expr.thenExpr)
         resolve(expr.elseExpr)
+    }
+
+    override fun visitGetExpr(expr: Expr.Get) {
+        resolve(expr.obj)
+    }
+
+    override fun visitSetExpr(expr: Expr.Set) {
+        resolve(expr.value)
+        resolve(expr.obj)
+    }
+
+    override fun visitThisExpr(expr: Expr.This) {
+        if (currentClass == ClassType.NONE) {
+            Lox.error(expr.keyword, "Can't use 'this' outside of a class.")
+            return
+        }
+        resolveLocal(expr, expr.keyword)
+    }
+
+    override fun visitSuperExpr(expr: Expr.Super) {
+        if (currentClass == ClassType.NONE) {
+            Lox.error(expr.keyword, "Can't use 'super' outside of a class.")
+        } else if (currentClass != ClassType.SUBCLASS) {
+            Lox.error(expr.keyword, "Can't use 'super' in a class with no superclass.")
+        }
+        resolveLocal(expr, expr.keyword)
     }
 
     fun resolve(statements: List<Stmt>) {

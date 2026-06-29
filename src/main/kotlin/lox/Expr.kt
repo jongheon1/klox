@@ -11,6 +11,10 @@ sealed class Expr {
         fun visitUnaryExpr(expr: Unary): R
         fun visitVariableExpr(expr: Variable): R
         fun visitTernaryExpr(expr: Ternary): R
+        fun visitGetExpr(expr: Get): R
+        fun visitSetExpr(expr: Set): R
+        fun visitThisExpr(expr: This): R
+        fun visitSuperExpr(expr: Super): R
     }
 
     class Assign(val name: Token, val value: Expr) : Expr() {
@@ -64,6 +68,30 @@ sealed class Expr {
     class Ternary(val condition: Expr, val thenExpr: Expr, val elseExpr: Expr) : Expr() {
         override fun <R> accept(visitor: Visitor<R>): R {
             return visitor.visitTernaryExpr(this)
+        }
+    }
+
+    class Get(val obj: Expr, val name: Token) : Expr() {
+        override fun <R> accept(visitor: Visitor<R>): R {
+            return visitor.visitGetExpr(this)
+        }
+    }
+
+    class Set(val obj: Expr, val name: Token, val value: Expr) : Expr() {
+        override fun <R> accept(visitor: Visitor<R>): R {
+            return visitor.visitSetExpr(this)
+        }
+    }
+
+    class This(val keyword: Token) : Expr() {
+        override fun <R> accept(visitor: Visitor<R>): R {
+            return visitor.visitThisExpr(this)
+        }
+    }
+
+    class Super(val keyword: Token, val method: Token) : Expr() {
+        override fun <R> accept(visitor: Visitor<R>): R {
+            return visitor.visitSuperExpr(this)
         }
     }
 

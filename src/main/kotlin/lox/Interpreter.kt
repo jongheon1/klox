@@ -185,6 +185,40 @@ class Interpreter :
         }
     }
 
+    override fun visitGetExpr(expr: Expr.Get): Any? {
+        val obj = evaluate(expr.obj)
+        if (obj is LoxInstance) {
+            return obj.get(expr.name)
+        }
+        throw RuntimeError(expr.name, "Only instances have properties.")
+    }
+
+    override fun visitSetExpr(expr: Expr.Set): Any? {
+        val obj = evaluate(expr.obj)
+        if (obj !is LoxInstance) {
+            throw RuntimeError(expr.name, "Only instances have fields.")
+        }
+
+        val value = evaluate(expr.value)
+        obj.set(expr.name, value)
+        return value
+    }
+
+    override fun visitThisExpr(expr: Expr.This): Any? = lookUpVariable(expr.keyword, expr)
+
+    override fun visitSuperExpr(expr: Expr.Super): Any? {
+        val distance = locals[expr]!!
+        val superclass = environment.getAt(distance, "super") as LoxClass
+        // `this` lives one scope nearer than `super` (see visitClassStmt).
+        val obj = environment.getAt(distance - 1, "this") as LoxInstance
+
+        val method =
+            superclass.findMethod(expr.method.lexeme)
+                ?: throw RuntimeError(expr.method, "Undefined property '${expr.method.lexeme}'.")
+
+        return method.bind(obj)
+    }
+
     override fun visitVariableExpr(expr: Expr.Variable): Any? = lookUpVariable(expr.name, expr)
 
     private fun lookUpVariable(name: Token, expr: Expr): Any? {
@@ -228,8 +262,42 @@ class Interpreter :
     }
 
     override fun visitFunctionStmt(stmt: Stmt.Function) {
-        val function = LoxFunction(stmt, environment)
+        val function = LoxFunction(stmt, environment, isInitializer = false)
         environment.define(stmt.name.lexeme, function)
+    }
+
+    override fun visitClassStmt(stmt: Stmt.Class) {
+        val superclass =
+            stmt.superclass?.let {
+                val evaluated = evaluate(it)
+                if (evaluated !is LoxClass) {
+                    throw RuntimeError(it.name, "Superclass must be a class.")
+                }
+                evaluated
+            }
+
+        // Two-stage binding so the class's own methods can refer to the class by name.
+        environment.define(stmt.name.lexeme, null)
+
+        // If there's a superclass, wrap the methods in a scope that holds `super`.
+        if (superclass != null) {
+            environment = Environment(environment)
+            environment.define("super", superclass)
+        }
+
+        val methods =
+            stmt.methods.associate { method ->
+                method.name.lexeme to
+                    LoxFunction(method, environment, isInitializer = method.name.lexeme == "init")
+            }
+
+        val klass = LoxClass(stmt.name.lexeme, superclass, methods)
+
+        if (superclass != null) {
+            environment = environment.enclosing!!
+        }
+
+        environment.assign(stmt.name, klass)
     }
 
     override fun visitIfStmt(stmt: Stmt.If) {

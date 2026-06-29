@@ -35,7 +35,11 @@ fun main(args: Array<String>) {
             AstType.of("Logical", "left: Expr, operator: Token, right: Expr"),
             AstType.of("Unary", "operator: Token, right: Expr"),
             AstType.of("Variable", "name: Token"),
-            AstType.of("Ternary", "condition: Expr, thenExpr: Expr, elseExpr: Expr")
+            AstType.of("Ternary", "condition: Expr, thenExpr: Expr, elseExpr: Expr"),
+            AstType.of("Get", "obj: Expr, name: Token"),
+            AstType.of("Set", "obj: Expr, name: Token, value: Expr"),
+            AstType.of("This", "keyword: Token"),
+            AstType.of("Super", "keyword: Token, method: Token"),
         ),
     )
 
@@ -44,6 +48,8 @@ fun main(args: Array<String>) {
         "Stmt",
         listOf(
             AstType.of("Block", "statements: List<Stmt>"),
+            AstType.of("Break", "keyword: Token"),
+            AstType.of("Class", "name: Token, superclass: Expr.Variable?, methods: List<Function>"),
             AstType.of("Expression", "expression: Expr"),
             AstType.of("Function", "name: Token, params: List<Token>, body: List<Stmt>"),
             AstType.of("If", "condition: Expr, thenBranch: Stmt, elseBranch: Stmt?"),

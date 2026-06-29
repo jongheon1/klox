@@ -3,8 +3,16 @@ package lox
 class LoxFunction(
     private val declaration: Stmt.Function,
     private val closure: Environment,
+    private val isInitializer: Boolean,
 ) : LoxCallable {
     override fun arity(): Int = declaration.params.size
+
+    /** Returns a copy of this method bound to [instance] via a `this`-holding closure. */
+    fun bind(instance: LoxInstance): LoxFunction {
+        val environment = Environment(closure)
+        environment.define("this", instance)
+        return LoxFunction(declaration, environment, isInitializer)
+    }
 
     override fun call(
         interpreter: Interpreter,
@@ -17,8 +25,14 @@ class LoxFunction(
         try {
             interpreter.executeBlock(declaration.body, environment)
         } catch (returnValue: Return) {
+            // An empty `return;` inside an initializer still yields the instance.
+            if (isInitializer) return closure.getAt(0, "this")
             return returnValue.value
         }
+        // An initializer always returns `this`, even with no explicit return.
+        if (isInitializer) return closure.getAt(0, "this")
         return null
     }
+
+    override fun toString(): String = "<fn ${declaration.name.lexeme}>"
 }

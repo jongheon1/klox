@@ -6,6 +6,8 @@ sealed class Stmt {
 
         fun visitBreakStmt(stmt: Break): R
 
+        fun visitClassStmt(stmt: Class): R
+
         fun visitExpressionStmt(stmt: Expression): R
 
         fun visitFunctionStmt(stmt: Function): R
@@ -31,6 +33,14 @@ sealed class Stmt {
         val keyword: Token,
     ) : Stmt() {
         override fun <R> accept(visitor: Visitor<R>): R = visitor.visitBreakStmt(this)
+    }
+
+    class Class(
+        val name: Token,
+        val superclass: Expr.Variable?,
+        val methods: List<Function>,
+    ) : Stmt() {
+        override fun <R> accept(visitor: Visitor<R>): R = visitor.visitClassStmt(this)
     }
 
     class Expression(

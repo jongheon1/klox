@@ -60,6 +60,7 @@ class Parser(
 
     private fun declaration(): Stmt? {
         try {
+            if (match(CLASS)) return classDeclaration()
             if (match(FUN)) return function("function")
             if (match(VAR)) return varDeclaration()
             return statement()
@@ -69,7 +70,27 @@ class Parser(
         }
     }
 
-    private fun function(kind: String): Stmt {
+    private fun classDeclaration(): Stmt {
+        val name = consume(IDENTIFIER, "Expect class name.")
+
+        var superclass: Expr.Variable? = null
+        if (match(LESS)) {
+            consume(IDENTIFIER, "Expect superclass name.")
+            superclass = Expr.Variable(previous())
+        }
+
+        consume(LEFT_BRACE, "Expect '{' before class body.")
+
+        val methods = mutableListOf<Stmt.Function>()
+        while (!check(RIGHT_BRACE) && !isAtEnd()) {
+            methods.add(function("method"))
+        }
+
+        consume(RIGHT_BRACE, "Expect '}' after class body.")
+        return Stmt.Class(name, superclass, methods)
+    }
+
+    private fun function(kind: String): Stmt.Function {
         val name = consume(IDENTIFIER, "Expect $kind name.")
         consume(LEFT_PAREN, "Expect '(' after $kind name.")
 
@@ -269,6 +290,8 @@ class Parser(
             if (expr is Expr.Variable) {
                 val name = expr.name
                 return Expr.Assign(name, value)
+            } else if (expr is Expr.Get) {
+                return Expr.Set(expr.obj, expr.name, value)
             }
 
             error(equals, "Invalid assignment target.")
@@ -378,6 +401,9 @@ class Parser(
         while (true) {
             if (match(LEFT_PAREN)) {
                 expr = finishCall(expr)
+            } else if (match(TokenType.DOT)) {
+                val name = consume(IDENTIFIER, "Expect property name after '.'.")
+                expr = Expr.Get(expr, name)
             } else {
                 break
             }
@@ -425,6 +451,17 @@ class Parser(
                 val expr = expression()
                 consume(RIGHT_PAREN, "Expect ')' after expression.")
                 Expr.Grouping(expr)
+            }
+
+            match(TokenType.THIS) -> {
+                Expr.This(previous())
+            }
+
+            match(TokenType.SUPER) -> {
+                val keyword = previous()
+                consume(TokenType.DOT, "Expect '.' after 'super'.")
+                val method = consume(IDENTIFIER, "Expect superclass method name.")
+                Expr.Super(keyword, method)
             }
 
             match(IDENTIFIER) -> {
