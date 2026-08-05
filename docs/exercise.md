@@ -1276,17 +1276,9 @@ print Math.square(3);   // 9   — 인스턴스 없이 클래스에서 바로 �
 
 ### 풀이: 메타클래스 (metaclass)
 
-깔끔한 방법은 Smalltalk의 **메타클래스**다. 핵심 통찰: "정적 메서드를 클래스에서 부른다"는 건 "그 클래스를 *인스턴스로 보는* 또 다른 클래스(메타클래스)의 인스턴스 메서드를 부른다"는 것이다. 즉 `LoxClass`가 **그 자체로 `LoxInstance`이기도** 하게 만들면, 12장에서 만든 프로퍼티 조회 메커니즘을 그대로 재사용할 수 있다.
+Smalltalk의 **메타클래스**가 깔끔하다. 핵심: "정적 메서드를 클래스에서 부른다"는 건 "클래스를 *인스턴스로 보는* 메타클래스의 인스턴스 메서드를 부른다"는 것. 그래서 `LoxClass`가 **그 자체로 `LoxInstance`이기도** 하게 만들면, 12장의 프로퍼티 조회(`LoxInstance.get`)를 고치지 않고 그대로 재사용한다.
 
-```java
-// LoxClass가 LoxInstance를 상속(혹은 포함)하게 한다.
-class LoxClass extends LoxInstance implements LoxCallable {
-  final LoxClass metaclass;            // 정적 메서드를 담는 클래스
-  // ...
-}
-```
-
-- 파서: 클래스 본문에서 메서드를 읽을 때 앞에 `class`가 오면 **정적 메서드 목록**에 따로 모은다.
+- 파서: 메서드 앞에 `class`가 오면 **정적 메서드 목록**으로 분리한다.
 
 ```java
 List<Stmt.Function> methods = new ArrayList<>();
@@ -1297,14 +1289,26 @@ while (!check(RIGHT_BRACE) && !isAtEnd()) {
 }
 ```
 
-- 인터프리터: 정적 메서드들로 **메타클래스**(`name + " metaclass"`)를 만들고, 그 메타클래스의 인스턴스로 실제 `LoxClass`를 생성한다. 그러면 `Math.square`는 `LoxInstance.get`이 메타클래스에서 메서드를 찾아 바인딩한다 — `this`는 클래스 자신이 된다.
+- `LoxClass`: `LoxInstance`를 상속하고, 생성자에서 **klass = 메타클래스**로 둔다(`LoxInstance(LoxClass)` 생성자 하나만 열어 주면 된다).
 
 ```java
-LoxClass metaclass = new LoxClass(null, name.lexeme + " metaclass", classMethods);
-LoxClass klass     = new LoxClass(metaclass, name.lexeme, methods);
+class LoxClass extends LoxInstance implements LoxCallable {
+  LoxClass(LoxClass metaclass, String name, LoxClass superclass,
+           Map<String, LoxFunction> methods) {
+    super(metaclass);          // LoxInstance의 klass = 메타클래스
+    // name, superclass, methods 대입 …
+  }
+}
 ```
 
-`Math.square(3)`은 `Math`(인스턴스로서)의 `get("square")` → 메타클래스의 `square`를 바인딩 → 호출, 로 흐른다. 12장 코드를 거의 그대로 두 번 쓰는 셈이다.
+- 인터프리터: 정적 메서드로 **메타클래스를 먼저** 만들고, 그걸 klass로 갖는 실제 클래스를 만든다.
+
+```java
+LoxClass metaclass = new LoxClass(null, name.lexeme + " metaclass", null, classMethods);
+LoxClass klass     = new LoxClass(metaclass, name.lexeme, superclass, methods);
+```
+
+조회는 새로 짤 게 없다: `Math.square`는 `LoxClass`(=`LoxInstance`)의 `get` → `klass`(=메타클래스)의 `findMethod`로 `square`를 찾아 **클래스 자신에 bind**한다. 그래서 정적 메서드 안의 `this`는 클래스 객체가 된다. 12장 코드를 한 겹 더 쓰는 셈이다.
 
 ---
 
@@ -1325,16 +1329,16 @@ print c.area;     // 50.265...   — c.area() 가 아니라 c.area
 
 ### 풀이
 
-게터는 "매개변수 목록이 없는 메서드"이고, **`.area` 접근(Get) 시점에 곧바로 호출**된다는 점만 다르다.
+게터는 ① 매개변수 목록이 없고, ② `.area`로 **접근(Get)하는 순간 곧바로 호출**된다는 점만 다르다. 나머지는 메서드와 같다(`bind`로 `this`가 묶인다).
 
-- 파서: `function()`에서 `(`가 안 오면 게터로 본다(매개변수 파싱을 건너뛰고 본문만). `Stmt.Function`에 `isGetter`(혹은 `params == null`)를 표시한다.
+- 파서: `(`가 안 오면 게터. 매개변수 파싱을 건너뛰고 `params`를 `null`로 둬 표시한다.
 
 ```java
 private Stmt.Function function(String kind) {
   Token name = consume(IDENTIFIER, "Expect " + kind + " name.");
 
-  List<Token> parameters = null;
-  if (!kind.equals("method") || check(LEFT_PAREN)) {    // 게터가 아니면 매개변수 파싱
+  List<Token> parameters = null;                        // null = 게터
+  if (!kind.equals("method") || check(LEFT_PAREN)) {    // 함수거나 '(' 가 보이면 일반 메서드
     consume(LEFT_PAREN, "Expect '(' after " + kind + " name.");
     parameters = new ArrayList<>();
     if (!check(RIGHT_PAREN)) {
@@ -1344,21 +1348,44 @@ private Stmt.Function function(String kind) {
     consume(RIGHT_PAREN, "Expect ')' after parameters.");
   }
   consume(LEFT_BRACE, "Expect '{' before " + kind + " body.");
-  List<Stmt> body = block();
-  return new Stmt.Function(name, parameters, body);      // parameters == null 이면 게터
+  return new Stmt.Function(name, parameters, block());   // parameters == null 이면 게터
 }
 ```
 
-- 인터프리터: `visitGetExpr`에서 찾은 멤버가 게터면 **즉시 호출**해 그 반환값을 돌려준다(바인딩만 하고 끝내지 않는다).
+- `LoxFunction`: `isGetter() = (params == null)`. (전용 플래그 불필요.)
+
+- Resolver: `resolveFunction`에서 `params`가 null이면 매개변수 선언을 건너뛴다(가드 안 넣으면 NPE). 게터도 그냥 `METHOD`로 해소하면 `this`가 맞게 잡힌다.
+
+```java
+beginScope();
+if (function.params != null) {                 // 게터면 건너뜀
+  for (Token param : function.params) { declare(param); define(param); }
+}
+resolve(function.body);
+endScope();
+```
+
+- 인터프리터: `visitGetExpr`에서 꺼낸 멤버가 게터면 **즉시 `call`**, 아니면 12장처럼 값으로 돌려준다.
+
+```
+class Circle {
+  init(radius) { this.radius = radius; }
+  area {                                  // 괄호 없음 = 게터
+    return 3.141592653 * this.radius * this.radius;
+  }
+}
+var c = Circle(4);
+print c.area;     // 50.265...   — c.area() 가 아니라 c.area
+```
 
 ```java
 @Override
 public Object visitGetExpr(Expr.Get expr) {
   Object object = evaluate(expr.object);
   if (object instanceof LoxInstance) {
-    Object result = ((LoxInstance) object).get(expr.name);
+    Object result = ((LoxInstance) object).get(expr.name);  // 필드 or bind된 LoxFunction
     if (result instanceof LoxFunction && ((LoxFunction) result).isGetter()) {
-      return ((LoxFunction) result).call(this, Collections.emptyList());  // 즉시 실행
+      return ((LoxFunction) result).call(this, Collections.emptyList());  // 게터 → 즉시 실행
     }
     return result;
   }
@@ -1366,7 +1393,7 @@ public Object visitGetExpr(Expr.Get expr) {
 }
 ```
 
-`area`는 인자 0개로 호출되며, `this`는 `bind`로 이미 묶여 있으므로 `this.radius`가 동작한다.
+`c.area`는 인자 0개로 호출되고 `this`가 bind돼 있어 `this.radius`가 동작한다. (`c.area()`라고 쓰면 게터 결과(숫자)를 또 호출하려다 런타임 에러.)
 
 ---
 
@@ -1386,6 +1413,37 @@ Ruby/Smalltalk처럼 "필드는 메서드 본문(=`this`를 통해서만)에서�
 - **Smalltalk**: 인스턴스 변수는 메서드 안에서만 보이고, 밖에서는 오직 메시지(메서드). 접근자(`x`, `x:`)를 직접 정의해 노출한다.
 
 Lox에 도입한다면 Ruby식이 깔끔하다 — `this.x`(필드, 내부 전용)와 `obj.x`(메서드, 외부 노출)를 의미상 분리하고, 필드는 밖에서 못 읽게 한다. 그러면 필드와 같은 이름의 게터를 둬도 충돌하지 않는다(밖에선 게터, 안에선 필드).
+
+### 강제한다면 — 어디에 검사를 넣나
+
+흥미로운 점은, Lox 구조에서 "필드는 `this`로만"을 강제하는 게 **구문 정보만으로 가능**하다는 것이다. 필드 접근의 진입점은 `visitGetExpr`/`visitSetExpr` 둘뿐이고, 거기서 **접근 대상 표현식이 `Expr.This`인지** 보면 "안에서(this) 접근"과 "밖에서(obj) 접근"을 가른다.
+
+```java
+@Override
+public Object visitGetExpr(Expr.Get expr) {
+  Object object = evaluate(expr.object);
+  if (object instanceof LoxInstance) {
+    LoxInstance instance = (LoxInstance) object;
+    boolean fromThis = expr.object instanceof Expr.This;   // this.x 인가, obj.x 인가
+    return instance.get(expr.name, fromThis);              // 필드는 fromThis 일 때만 허용
+  }
+  throw new RuntimeError(expr.name, "Only instances have properties.");
+}
+```
+
+```java
+// LoxInstance.get — 외부에서 온 필드 접근이면 메서드만 허용
+Object get(Token name, boolean fromThis) {
+  if (fromThis && fields.containsKey(name.lexeme)) {       // 필드는 내부에서만
+    return fields.get(name.lexeme);
+  }
+  LoxFunction method = klass.findMethod(name.lexeme);      // 밖에서는 메서드/게터만
+  if (method != null) return method.bind(this);
+  throw new RuntimeError(name, "Undefined property '" + name.lexeme + "'.");
+}
+```
+
+이러면 같은 이름의 필드 `x`와 게터 `x`가 공존해도, **밖에선 게터가, 안(`this.x`)에선 필드가** 잡혀 충돌이 사라진다. `set`도 같은 방식으로 막으면 외부의 `obj.x = ...` 필드 추가가 차단된다. 비용은 거의 없다(분기 하나) — Lox가 안 하는 건 능력이 없어서가 아니라 **단순함을 택한 설계**임을 보여준다.
 
 ### 트레이드오프와 견해
 
@@ -1412,23 +1470,69 @@ Lox에 도입한다면 Ruby식이 깔끔하다 — `this.x`(필드, 내부 전�
 
 **선택: 믹스인**. 이유 — Lox의 기존 단일 상속 체인을 거의 건드리지 않고 얹을 수 있고, "동작 재사용"이라는 실용 목표에 충분하다. 상태 충돌 위험은 트레이트(상태 없음)가 더 안전하지만, Lox 메서드는 본문만이라 믹스인으로도 단순하게 간다.
 
+### 핵심 개념 — "선형화(MRO)"로 충돌을 순서로 바꾼다
+
+단일 상속에서 메서드 탐색은 쉽다. 내 클래스에 없으면 **부모로 한 칸 위**, 또 없으면 그 위로 — 상속이 **한 줄(체인)**이라 "다음에 볼 곳"이 늘 하나뿐이다. `super`도 "그 한 줄에서 바로 위"를 뜻한다.
+
+믹스인은 이 한 줄에 **곁가지를 붙인다.** `class C < Base with M1, M2`면 메서드 출처가 C·M1·M2·Base 넷이다. 이제 `c.foo()`를 부르면 **넷 중 누구의 `foo`가 이기나?** 곁가지가 생기면서 "다음에 볼 곳"이 여러 개가 돼버렸다.
+
+해법은 **곁가지를 다시 한 줄로 펴는 것** — 이게 선형화(MRO, *Method Resolution Order*)다. C·M1·M2·Base를 **정해진 규칙으로 한 줄로 늘어세우면**, 탐색은 다시 "그 줄을 앞에서부터 훑기"로 단순해진다. 즉 충돌이 **순서 문제**로 바뀐다.
+
+줄 세우는 규칙(이 스케치): **자기 → 믹스인(뒤에 쓴 게 앞) → 상위의 MRO**.
+
+```
+class C < Base with M1, M2
+
+     C            곁가지(믹스인)를 한 줄로 펴면:
+   / | \
+ M2 M1 Base  →   [C] → [M2] → [M1] → [Base]
+                 자기   뒤 믹스인  앞 믹스인   상위
+```
+
+- `c.foo()` → 이 줄을 앞에서부터 훑어 **처음 만난 `foo`**가 이긴다(C에 있으면 C, 없으면 M2, …).
+- **뒤에 쓴 믹스인이 앞**: `with M1, M2`에서 M2가 M1보다 우선(나중에 섞은 게 덮어쓴다는 직관).
+- **상위(Base)는 맨 뒤**: 내 것·믹스인에 다 없을 때 최후로 본다.
+
+다이아몬드(공통 조상)도 이 줄에서 자동으로 풀린다. M1·M2가 둘 다 Base를 상속해도, 선형화가 **Base를 한 번만** 남기므로(중복 제거) "Base를 두 번 거치나?" 같은 모호함이 없다. 다중 상속의 다이아몬드 문제를 **한 줄로 펴고 중복을 지우는 것**으로 회피하는 셈이다.
+
+그러면 `super`는 자연스럽게 **"이 줄에서 내 다음 칸"**으로 일반화된다. 단일 상속에선 다음 칸이 곧 부모 하나였지만, MRO에선 다음 칸이 믹스인일 수도 상위일 수도 있다 — 의미는 똑같이 "현재 정의 **바로 다음**에 볼 곳". 그래서 아래 스케치는 `super` 환경에 단일 클래스 대신 **MRO의 꼬리 목록**을 담는다.
+
 ### 스케치
 
-`class C < Base with M1, M2 { ... }` 같은 문법을 두고, **메서드 탐색 순서**를 `C → M2 → M1 → Base`로 선형화한다. `findMethod`가 이 순서대로 훑게 만들면 끝이다.
+`class C < Base with M1, M2 { ... }` 문법을 두고, 클래스마다 **선형화된 탐색 목록(MRO)** 을 만들어 `findMethod`가 그 순서로 훑게 한다.
+
+- 파서/AST: `with` 뒤 믹스인 이름들을 `Expr.Variable`로 모아 `Stmt.Class`에 넣는다(상위클래스와 같은 이유로 변수다).
 
 ```java
-// LoxClass: 선형화된 탐색 목록을 미리 만들어 둔다 (C3-ish)
-private final List<LoxClass> mro;   // [C, M2, M1, Base, ...]
+List<Expr> mixins = new ArrayList<>();
+if (match(WITH)) {
+  do { consume(IDENTIFIER, "Expect mixin name."); mixins.add(new Expr.Variable(previous())); }
+  while (match(COMMA));
+}
+return new Stmt.Class(name, superclass, mixins, methods);
+```
+
+- 인터프리터: 믹스인들을 평가해 `LoxClass` 목록을 얻어 `LoxClass`에 넘긴다(각각 클래스인지 런타임 검사).
+
+- `LoxClass`: MRO = **자기 → 믹스인 역순(뒤에 쓴 게 우선) → 상위의 MRO**. `findMethod`는 MRO를 순서대로 훑는다.
+
+```java
+List<LoxClass> linear = new ArrayList<>();
+linear.add(this);                                      // 1) 나 자신
+for (int i = mixins.size() - 1; i >= 0; i--)           // 2) 믹스인 역순
+  linear.add(mixins.get(i));
+if (superclass != null) linear.addAll(superclass.mro); // 3) 상위 MRO 이어붙임
+this.mro = dedup(linear);                              // 중복 제거(정석은 C3 선형화)
 
 LoxFunction findMethod(String name) {
-  for (LoxClass klass : mro) {
-    if (klass.methods.containsKey(name)) return klass.methods.get(name);
-  }
+  for (LoxClass k : mro) { LoxFunction m = k.methodsLocal(name); if (m != null) return m; }
   return null;
 }
 ```
 
-믹스인은 상태(필드)를 안 가지므로 인스턴스 구조엔 영향이 없고, `super`는 "MRO에서 다음 클래스"로 일반화하면 자연스럽게 동작한다.
+- `super`: "상위클래스 하나" 대신 **"MRO에서 정의 클래스의 다음"** 으로 일반화한다 — 바인딩 시 super 환경에 단일 클래스 대신 *MRO의 꼬리 목록*을 담으면 된다.
+
+`class C < Base with M1, M2` → MRO = `[C, M2, M1, Base]`. 다중 상속과 달리 공통 조상 Base가 **한 번만** 들어가 충돌이 순서로 풀린다. 믹스인은 상태(필드)가 없어 인스턴스 구조엔 영향이 없고, 손대는 곳은 **MRO와 super의 의미**뿐이다.
 
 ---
 
@@ -1462,25 +1566,82 @@ BostonCream().cook();
 // Place on a rack to cool.
 ```
 
-### 구현에 필요한 것
+`super:sub = 1:n`(상위 하나에 하위 여럿)이라 "`inner`가 그중 뭘?"이 헷갈리지만, 메서드는 **클래스가 아니라 객체에 대고** 부른다. `BostonCream()` 객체는 실제 클래스가 하나로 확정돼 혈통이 딱 한 줄이라, 형제(`Glazed`)는 후보조차 아니고 `inner`는 그 줄을 한 칸 내려갈 뿐이다. `super`가 부모 하나로 위가 정해지듯, `inner`는 실제 클래스로 아래가 정해진다(같은 혈통 한 줄을 방향만 반대로).
 
-`super`의 거울상이다. 핵심은 **호출이 항상 가장 상위 정의에서 시작**해야 한다는 것, 그리고 `inner`가 "이 메서드의 *하위* 버전"을 가리켜야 한다는 것.
+### 왜 이렇게 하나 — Template Method 패턴
 
-1. **메서드 디스패치 방향 뒤집기**: `instance.cook()`은 `findMethod`가 찾은 *최상위* 클래스의 `cook`부터 실행해야 한다. 그러려면 탐색을 위에서 아래로 하거나, 같은 이름 메서드들의 **체인**(상위→하위)을 만들어 맨 위부터 부른다.
-
-2. **`inner` 바인딩**: `super`가 클로저에 "상위클래스"를 담았듯, `inner`는 클로저에 **하위(override) 메서드**를 담는다. 메서드를 바인딩할 때 `this`·`super`에 더해 `inner`(다음 하위 메서드, 없으면 no-op)를 환경에 넣는다.
+`inner`는 **Template Method 패턴을 언어 기능으로 굳힌 것**이다. 부모가 전체 흐름(뼈대)을 한 메서드에 박아두고, 바뀌는 부분만 **별도의 훅 메서드로 빼** 자식이 오버라이드하게 하는 패턴이다.
 
 ```java
-// 개념적 평가
-@Override
-public Object visitInnerExpr(Expr.Inner expr) {
-  LoxFunction innerMethod = (LoxFunction) environment.getAt(distance, "inner");
-  if (innerMethod == null) return null;            // 하위가 없으면 no-op
-  return innerMethod.call(this, ...);              // 하위 메서드 실행
+// 부모: 흐름을 쥔다. 바뀔 부분은 fill() 로 위임.
+class Doughnut {
+  final void cook() {       // ← 템플릿 메서드 (뼈대, 못 건드리게 final)
+    fry();
+    fill();                 // ← 훅. 여기만 자식이 채운다
+    cool();
+  }
+  void fry()  { print "튀김"; }
+  void fill() { }           // 기본은 비어있음 (자식이 오버라이드)
+  void cool() { print "식힘"; }
+}
+class BostonCream extends Doughnut {
+  @Override void fill() { print "커스터드"; }   // 구멍만 채움
 }
 ```
 
-3. **`Expr.Inner` 노드 + Resolver**: `inner`도 `this`/`super`처럼 가짜 스코프로 해소하고, 클래스 밖 사용을 정적 에러로 막는다.
+핵심 세 가지:
+1. **부모가 흐름을 쥔다** — `cook()`이 `fry→fill→cool` 순서를 강제. 자식은 순서를 못 바꿈.
+2. **자식은 지정된 구멍(`fill`)만 채운다.**
+3. **앞뒤(`fry`, `cool`)는 무조건 실행된다** — 자식이 건드릴 수 없으니 보장됨.
 
-요약하면 — `inner`는 **방향만 반대인 `super`**다. (a) 디스패치를 최상위 정의에서 시작하도록 바꾸고, (b) 메서드 바인딩 환경에 "하위 메서드" 참조(`inner`)를 심고, (c) `Expr.Inner`를 그 참조의 호출로 평가하면 된다. `super`를 만든 그 기계(클로저에 담아 거리로 꺼내기)를 거울처럼 재사용하는 게 전부다.
+`inner` = **이걸 언어가 자동으로 해주는 것.** Template Method는 훅 메서드를 손으로 따로 빼야 한다(`cook`과 `fill`을 분리). BETA의 `inner`는 그 분리 없이, 같은 이름 메서드 안에 `inner` 키워드 하나로 "여기가 구멍"이라 표시만 하면 된다.
+
+```
+class Doughnut {
+  cook() { print "튀김"; inner; print "식힘"; }   // inner = fill() 자리
+}
+class BostonCream < Doughnut {
+  cook() { print "커스터드"; }                     // 이 cook 이 그 구멍에 들어감
+}
+```
+
+`super`와 뒤집힌 지점이 핵심이다.
+
+```
+super: 자식이 주도. super.cook() 안 부르면 부모 앞뒤 코드가 통째로 실종 가능.
+inner: 부모가 주도. 자식은 뚫린 구멍에만 들어가, 부모 앞뒤(fry/cool)는 항상 실행 보장.
+```
+
+`super`는 흐름 보장이 자식의 "매너"에 달렸지만, `inner`는 부모가 운전대를 쥐고 순서·전후 처리를 **구조적으로 강제**한다.
+
+### 구현에 필요한 것
+
+`super`의 거울상이다. (A) 호출이 항상 **최상위 정의에서 시작**하고, (B) `inner`가 **하위 버전**을 가리킨다.
+
+- 디스패치: `instance.cook()`은 수신자 클래스에서 위로 올라가며 같은 이름 정의를 모아 **상위→하위 체인**으로 엮고, 머리(최상위)부터 호출한다. 각 단계의 `inner` = 다음(하위) 단계. (`super`를 클로저에 담던 자리에 방향만 반대로.)
+
+```java
+private LoxFunction bindChain(List<LoxFunction> defs, LoxInstance inst) {
+  LoxFunction next = null;                        // 맨 아래의 inner = 없음
+  for (int i = defs.size() - 1; i >= 0; i--)      // 아래→위로 엮어 올라간다
+    next = defs.get(i).bindWithInner(inst, next); // 환경에 this 와 inner(=next) 를 정의
+  return next;                                    // 머리(최상위) 반환 → 이걸 call
+}
+```
+
+- `inner` 평가(`Expr.Inner`): 클로저에서 꺼내 호출, 없으면 no-op.
+
+```java
+@Override
+public Object visitInnerExpr(Expr.Inner expr) {
+  int distance = locals.get(expr);
+  LoxFunction inner = (LoxFunction) environment.getAt(distance, "inner");
+  if (inner == null) return null;                 // 하위 오버라이드 없으면 아무것도 안 함
+  return inner.call(this, Collections.emptyList());
+}
+```
+
+- Resolver: `inner`도 `this`/`super`처럼 가짜 스코프로 해소하고 클래스 밖 사용을 정적 에러로 막는다(13.4와 같은 틀).
+
+`BostonCream().cook()`이면 체인은 `[Doughnut.cook → BostonCream.cook]`. Doughnut.cook이 먼저 돌다 `inner`에서 BostonCream.cook이 끼어들고, 다시 Doughnut.cook으로 돌아와 마무리한다 — `inner`는 **방향만 반대인 `super`**라, 클로저에 담아 거리로 꺼내는 그 기계를 뒤집어 재사용하는 게 전부다.
 

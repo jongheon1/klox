@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>klox · super / this 상태 시각화</title>
+<style>
+  :root{
+    --bg:#f7f8fb; --card:#ffffff; --ink:#1b2230; --muted:#667085;
+    --accent:#6366f1; --accent2:#8b5cf6; --accent3:#0ea5e9;
+    --line:#e7e9f0; --line2:#eef0f6;
+    --code-bg:#0f1422; --code-ink:#e7eaf3; --code-cmt:#7e8aa6; --code-str:#f3b07a; --code-kw:#c4b5fd;
+    --ok:#10b981; --warn:#f59e0b; --bad:#ef4444;
+    --shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Pretendard","Apple SD Gothic Neo","Segoe UI",system-ui,-apple-system,"Malgun Gothic",sans-serif;
+    line-height:1.62;-webkit-font-smoothing:antialiased}
+  code,pre,.mono{font-family:"JetBrains Mono","SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace}
+
+  header.hero{background:radial-gradient(1200px 400px at 12% -10%,rgba(139,92,246,.18),transparent 60%),
+              radial-gradient(900px 380px at 90% -20%,rgba(14,165,233,.16),transparent 55%),
+              linear-gradient(180deg,#fff,#fbfcff);border-bottom:1px solid var(--line)}
+  .hero-in{max-width:1160px;margin:0 auto;padding:46px 24px 24px}
+  .kicker{font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+  h1{font-size:clamp(26px,4vw,40px);margin:.28em 0 .15em;letter-spacing:-.02em;line-height:1.15}
+  .sub{color:var(--muted);font-size:16px;max-width:70ch;margin:0}
+
+  main{max-width:1160px;margin:0 auto;padding:26px 24px 90px}
+
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff;box-shadow:var(--shadow);flex-wrap:wrap}
+  .seg button{font:inherit;font-size:13.5px;font-weight:650;border:none;background:#fff;color:#566;cursor:pointer;padding:10px 16px;border-right:1px solid var(--line2)}
+  .seg button:last-child{border-right:none}
+  .seg button.on{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+
+  .exhead{margin:22px 0 4px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .exhead .n{font-size:12px;font-weight:800;color:#fff;background:var(--ink);border-radius:7px;padding:3px 9px;letter-spacing:.04em}
+  .exhead .t{font-size:20px;font-weight:800;letter-spacing:-.01em}
+  .exhead .g{color:var(--muted);font-size:14px}
+
+  .grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;margin-top:14px}
+  @media(max-width:920px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:0;box-shadow:var(--shadow);overflow:hidden}
+  .card .ct{font-size:11.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#9aa3bd;padding:11px 16px 0}
+
+  /* source */
+  pre.src{margin:0;background:var(--code-bg);color:var(--code-ink);padding:14px 0;overflow:auto;font-size:12.7px;line-height:1.7;border-top:1px solid #1b2236;margin-top:8px}
+  pre.src .ln{display:block;padding:0 16px 0 48px;position:relative;white-space:pre;border-left:3px solid transparent}
+  pre.src .ln::before{content:attr(data-n);position:absolute;left:0;width:38px;text-align:right;color:#3f4a66;padding-right:8px}
+  pre.src .ln.hot{background:rgba(99,102,241,.20);border-left-color:var(--accent2)}
+  pre.src .c{color:var(--code-cmt);font-style:italic}
+  pre.src .s{color:var(--code-str)}
+  pre.src .k{color:var(--code-kw);font-weight:600}
+
+  /* controls */
+  .ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:14px 0 2px}
+  .btn{font:inherit;font-size:13px;font-weight:650;color:#fff;border:none;cursor:pointer;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));padding:9px 15px;border-radius:11px;box-shadow:var(--shadow);transition:.12s;display:inline-flex;align-items:center;gap:7px}
+  .btn:hover{filter:brightness(1.06);transform:translateY(-1px)}
+  .btn:active{transform:translateY(0)}
+  .btn.ghost{background:#fff;color:#3a4258;border:1px solid var(--line)}
+  .btn:disabled{opacity:.4;cursor:not-allowed;transform:none;filter:none}
+  .stepcount{font-size:13px;font-weight:700;color:var(--muted);margin-left:2px}
+  input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
+
+  /* narration */
+  .narr{margin:12px 0 0;background:#faf9ff;border:1px solid #e9e6ff;border-left:3px solid var(--accent2);border-radius:0 12px 12px 0;padding:12px 16px;font-size:14px;min-height:60px}
+  .narr .ph{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);display:inline-block;margin-bottom:3px}
+  .narr b{color:#3b2f86}
+  .narr code{background:#efeaff;border:1px solid #e0d8ff;border-radius:5px;padding:1px 5px;font-size:12.5px;color:#4b3fa6}
+
+  /* env chain */
+  .stage{padding:14px 16px 18px}
+  .envcol{display:flex;flex-direction:column;gap:0}
+  .frame{border:1.5px solid var(--line);border-radius:12px;background:#fff;padding:9px 12px;transition:.2s;position:relative}
+  .frame.hot{border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,102,241,.13);background:#fbfaff}
+  .frame .fh{display:flex;align-items:center;gap:8px;justify-content:space-between}
+  .frame .fname{font-size:12.5px;font-weight:800;color:#3a4258}
+  .frame .dist{font-size:10.5px;font-weight:800;letter-spacing:.03em;color:#fff;background:var(--accent3);border-radius:6px;padding:2px 7px}
+  .frame .dist.super{background:var(--accent2)}
+  .frame .dist.thiss{background:var(--ok)}
+  .binds{margin:7px 0 0;display:flex;flex-direction:column;gap:4px}
+  .bind{display:flex;gap:6px;font-family:"JetBrains Mono",Consolas,monospace;font-size:12px;align-items:baseline}
+  .bind .bk{color:#7c4dff;font-weight:700}
+  .bind .eq{color:#9aa3bd}
+  .bind .bv{color:#1b2230}
+  .bind.mark{background:#fff3d6;border-radius:6px;padding:1px 6px;margin:0 -6px}
+  .empty{font-size:11.5px;color:#aab;font-style:italic}
+  .lnk{display:flex;justify-content:center;color:#c3c8d6;font-size:13px;line-height:1;padding:2px 0}
+  .toptag{font-size:10.5px;font-weight:700;color:#9aa3bd;text-align:center;margin-bottom:5px;letter-spacing:.04em}
+
+  /* instances + stack + term */
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+  @media(max-width:560px){.row2{grid-template-columns:1fr}}
+  .panel{border:1px solid var(--line);border-radius:12px;background:#fdfdff;padding:10px 12px}
+  .panel .pt{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#9aa3bd;margin-bottom:7px}
+  .inst{border:1.5px solid var(--line);border-radius:10px;padding:7px 10px;margin-bottom:7px;background:#fff;transition:.2s}
+  .inst.hot{border-color:var(--ok);box-shadow:0 0 0 3px rgba(16,185,129,.12)}
+  .inst .ih{font-size:12px;font-weight:800;color:#0a7d57}
+  .inst .if{font-family:"JetBrains Mono",Consolas,monospace;font-size:11.5px;color:#334;margin-top:3px}
+  .inst .if .mk{background:#d6f7e6;border-radius:4px;padding:0 4px}
+  .stk{display:flex;flex-direction:column-reverse;gap:4px}
+  .sf{font-family:"JetBrains Mono",Consolas,monospace;font-size:11.5px;background:#eef1fb;border:1px solid #e1e6f5;border-radius:7px;padding:4px 9px;color:#3a4258}
+  .sf.top{background:linear-gradient(135deg,#eef0ff,#f3eeff);border-color:#d9ddff;font-weight:700;color:var(--accent)}
+  .term{background:#0f1422;color:#8ce6b0;border-radius:10px;padding:11px 13px;font-family:"JetBrains Mono",Consolas,monospace;font-size:12.5px;min-height:38px;white-space:pre-wrap;border:1px solid #1b2236}
+  .term .muted{color:#5d6b86}
+
+  .takeaway{margin-top:16px;background:#f0fbf6;border:1px solid #cdeede;border-left:3px solid var(--ok);border-radius:0 12px 12px 0;padding:13px 16px;font-size:14px}
+  .takeaway b{color:#0a6b4a}
+  .takeaway code{background:#ddf3e9;border:1px solid #c3e9d6;border-radius:5px;padding:1px 5px;font-size:12.5px}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:10px 0 0;align-items:center}
+  .legend span{display:inline-flex;align-items:center;gap:5px}
+  .dotc{width:11px;height:11px;border-radius:4px;display:inline-block}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-in">
+    <div class="kicker">Crafting Interpreters · 13장</div>
+    <h1>super / this 상태 시각화</h1>
+    <p class="sub">클래스 정의부터 호출까지 한 스텝씩 넘기면서, <b>환경 체인·인스턴스 필드·콜스택·출력</b>이 어떻게 바뀌는지 본다.
+       핵심은 하나: <code style="background:#eef0ff;border:1px solid #e1e4ff;border-radius:5px;padding:1px 6px">super는 메서드를 "찾는 출발점"만 위로 올린다 — this가 가리키는 객체는 끝까지 원래 인스턴스다.</code></p>
+  </div>
+</header>
+
+<main>
+  <div class="seg" id="tabs"></div>
+
+  <div class="exhead">
+    <span class="n" id="exn">예제 1</span>
+    <span class="t" id="ext"></span>
+    <span class="g" id="exg"></span>
+  </div>
+
+  <div class="legend">
+    <span><i class="dotc" style="background:var(--accent2)"></i> super 환경(상위클래스)</span>
+    <span><i class="dotc" style="background:var(--ok)"></i> this 환경(인스턴스)</span>
+    <span><i class="dotc" style="background:#fff3d6;border:1px solid #f0dba0"></i> 방금 바뀐 바인딩</span>
+    <span><i class="dotc" style="background:var(--accent)"></i> 지금 실행 중인 프레임</span>
+  </div>
+
+  <div class="ctrl">
+    <button class="btn ghost" id="reset">⟲ 처음</button>
+    <button class="btn ghost" id="prev">◂ 이전</button>
+    <button class="btn" id="next">다음 ▸</button>
+    <button class="btn ghost" id="play">▶ 자동</button>
+    <span class="stepcount" id="cnt"></span>
+    <input type="range" id="slider" min="0" value="0" />
+  </div>
+
+  <div class="narr" id="narr"></div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="ct">소스 — 현재 실행 위치</div>
+      <pre class="src" id="src"></pre>
+    </div>
+    <div class="card">
+      <div class="ct">환경 체인 (Environment) · 위 = 안쪽/실행 중</div>
+      <div class="stage">
+        <div class="toptag">▲ 안쪽 (지금 보는 변수)</div>
+        <div class="envcol" id="env"></div>
+        <div class="toptag" style="margin-top:6px">▼ 바깥 (전역)</div>
+        <div class="row2">
+          <div class="panel">
+            <div class="pt">힙 · 인스턴스</div>
+            <div id="insts"></div>
+          </div>
+          <div class="panel">
+            <div class="pt">콜스택 (위 = top)</div>
+            <div class="stk" id="stk"></div>
+            <div class="pt" style="margin:10px 0 5px">출력</div>
+            <div class="term" id="term"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="takeaway" id="take"></div>
+</main>
+
+<script>
+/* ---------- helpers to build step data compactly ---------- */
+// frame: {name, binds:[[k,v,mark?]], hot, dist:{label,kind}}
+function F(name, binds, opt={}){return {name, binds:binds||[], hot:!!opt.hot, dist:opt.dist||null};}
+function I(name, klass, fields, opt={}){return {name, klass, fields:fields||[], hot:!!opt.hot};}
+
+/* global frame shorthands per example get rebuilt per step for clarity */
+
+/* ============================ EXAMPLE 1 ============================ */
+const ex1 = {
+  num:"예제 3", title:"Animal · Dog — 상위 메서드가 this를 읽는다",
+  goal:"super.describe() 안의 this.name 이 \"Rex\"가 나오는 이유",
+  src:[
+    'class Animal {',
+    '  init(name) { this.name = name; }',
+    '  describe() {',
+    '    return this.name + " makes a sound";',
+    '  }',
+    '}',
+    '',
+    'class Dog < Animal {',
+    '  describe() {',
+    '    return super.describe() + " (woof)";',
+    '  }',
+    '}',
+    '',
+    'var d = Dog("Rex");',
+    'print d.describe();'
+  ],
+  take:'<b>super.describe()</b> 는 메서드 검색을 <code>Animal</code>로 올렸을 뿐, <code>method.bind(#1)</code>로 <b>this는 다시 #1(Rex)</b>에 묶었다. 그래서 Animal의 본문 <code>this.name</code>이 정확히 "Rex"를 읽는다. bind를 빼면 this가 엉뚱해져 출력이 깨진다.',
+  steps:[
+    { line:[], phase:"시작",
+      desc:"전역 환경만 있는 상태에서 출발한다.",
+      env:[F("전역 (global)",[])], insts:[], stk:[], out:[] },
+
+    { line:[0,1,2,3,4,5], phase:"정의",
+      desc:"<b>Animal</b> 클래스를 정의한다. Animal은 상위클래스가 없으므로 메서드들의 클로저는 그냥 <b>전역</b>이다. 전역에 <code>Animal</code> 바인딩.",
+      env:[F("전역 (global)",[["Animal","‹class Animal›",1]])], insts:[], stk:[], out:[] },
+
+    { line:[7], phase:"정의",
+      desc:"<b>class Dog &lt; Animal</b> — 상위클래스 <code>Animal</code>은 <u>변수</u>다. 그 변수를 평가해 클래스 객체 <code>‹class Animal›</code>을 얻는다.",
+      env:[F("전역 (global)",[["Animal","‹class Animal›",1]])], insts:[], stk:[], out:[] },
+
+    { line:[7], phase:"정의",
+      desc:"Dog의 메서드를 만들기 직전, <b>super 환경</b>을 한 겹 끼운다: <code>super = ‹class Animal›</code>. Dog.describe는 <b>이 환경을 클로저로 붙잡는다</b> — 나중에 super가 누구인지 여기서 찾는다.",
+      env:[F("super 환경",[["super","‹class Animal›",1]],{hot:true,dist:{label:"Dog 메서드의 클로저",kind:"super"}}),
+           F("전역 (global)",[["Animal","‹class Animal›"]])], insts:[], stk:[], out:[] },
+
+    { line:[7,8,9,10,11], phase:"정의",
+      desc:"Dog 클래스 생성(메서드 describe, superclass=Animal). super 환경은 닫고, 전역에 <code>Dog</code> 바인딩. <span class='empty'>※ Dog.describe는 여전히 super 환경을 클로저로 기억하고 있음.</span>",
+      env:[F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›",1]])], insts:[], stk:[], out:[] },
+
+    { line:[13], phase:"생성",
+      desc:"<code>Dog(\"Rex\")</code> — 클래스를 <b>호출</b>한다. LoxClass.call() 이 빈 인스턴스를 만든다.",
+      env:[F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›"]])],
+      insts:[I("#1","Dog instance",[],{hot:true})], stk:["Dog(\"Rex\")"], out:[] },
+
+    { line:[13], phase:"생성",
+      desc:"<code>init</code> 탐색: Dog엔 없음 → <b>findMethod가 상위 Animal로 올라가</b> init 발견. 그 init을 인스턴스 #1에 bind 한다.",
+      env:[F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›"]])],
+      insts:[I("#1","Dog instance",[])], stk:["Dog(\"Rex\")"], out:[] },
+
+    { line:[1], phase:"생성",
+      desc:"init 실행. bind가 만든 <b>this 환경</b>(this=#1) 위에 인자 <code>name=\"Rex\"</code>. <span class='empty'>※ Animal의 init이라 클로저는 전역.</span>",
+      env:[F("init 지역",[["name","\"Rex\"",1]],{hot:true}),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this",kind:"thiss"}}),
+           F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›"]])],
+      insts:[I("#1","Dog instance",[])], stk:["Dog(\"Rex\")","Animal.init"], out:[] },
+
+    { line:[1], phase:"생성",
+      desc:"<code>this.name = name</code> 실행 → 인스턴스 #1의 <b>필드 name = \"Rex\"</b>가 박힌다. (지역변수가 아니라 객체에 남는다!)",
+      env:[F("init 지역",[["name","\"Rex\""]]),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this",kind:"thiss"}}),
+           F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›"]])],
+      insts:[I("#1","Dog instance",[["name","\"Rex\"",1]],{hot:true})], stk:["Dog(\"Rex\")","Animal.init"], out:[] },
+
+    { line:[13], phase:"생성",
+      desc:"생성자는 인스턴스 #1을 반환 → <code>d = #1</code>. 콜스택이 비워진다.",
+      env:[F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›"],["d","→ #1",1]])],
+      insts:[I("#1","Dog instance",[["name","\"Rex\""]])], stk:[], out:[] },
+
+    { line:[14], phase:"호출",
+      desc:"<code>d.describe()</code> — describe 탐색: <b>Dog에서 발견</b>(오버라이드 버전). 이걸 #1에 bind.",
+      env:[F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›"],["d","→ #1"]])],
+      insts:[I("#1","Dog instance",[["name","\"Rex\""]])], stk:["d.describe()"], out:[] },
+
+    { line:[8,9], phase:"호출",
+      desc:"Dog.describe 실행. 환경이 <b>this 환경(this=#1) → super 환경(super=Animal)</b> 순으로 쌓인다. 본문 <code>super.describe() + \" (woof)\"</code> 평가 시작.",
+      env:[F("describe 지역",[],{hot:true}),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this",kind:"thiss"}}),
+           F("super 환경",[["super","‹class Animal›"]],{dist:{label:"super",kind:"super"}}),
+           F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›"],["d","→ #1"]])],
+      insts:[I("#1","Dog instance",[["name","\"Rex\""]])], stk:["d.describe()"], out:[] },
+
+    { line:[9], phase:"호출 · super 평가",
+      desc:"<code>super.describe()</code>: Resolver가 준 거리로 두 값을 꺼낸다 — <b>super는 super 환경(거리 d)</b>에서 ‹class Animal›, <b>this는 그보다 한 칸 안쪽(거리 d−1)</b>에서 #1. <u>this가 super보다 1 가깝다</u>.",
+      env:[F("describe 지역",[]),
+           F("this 환경",[["this","→ #1",1]],{dist:{label:"거리 d−1 · this",kind:"thiss"}}),
+           F("super 환경",[["super","‹class Animal›",1]],{dist:{label:"거리 d · super",kind:"super"}}),
+           F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›"],["d","→ #1"]])],
+      insts:[I("#1","Dog instance",[["name","\"Rex\""]])], stk:["d.describe()"], out:[] },
+
+    { line:[9], phase:"호출 · 재바인딩",
+      desc:"Animal.describe 를 찾아 <b>method.bind(#1)</b> — 핵심! 상위 메서드지만 this는 <b>여전히 #1</b>. 그 위에 새 this 환경을 깔고 호출.",
+      env:[F("describe 지역(Animal)",[],{hot:true}),
+           F("this 환경",[["this","→ #1",1]],{dist:{label:"this = 여전히 #1",kind:"thiss"}}),
+           F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›"],["d","→ #1"]])],
+      insts:[I("#1","Dog instance",[["name","\"Rex\""]])], stk:["d.describe()","super→Animal.describe"], out:[] },
+
+    { line:[3], phase:"호출",
+      desc:"Animal.describe 본문 <code>this.name + \" makes a sound\"</code> — this=#1 이라 <code>#1.name = \"Rex\"</code>. 결과 <b>\"Rex makes a sound\"</b> 반환.",
+      env:[F("describe 지역(Animal)",[]),
+           F("this 환경",[["this","→ #1",1]],{dist:{label:"this",kind:"thiss"}}),
+           F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›"],["d","→ #1"]])],
+      insts:[I("#1","Dog instance",[["name","\"Rex\"",1]],{hot:true})], stk:["d.describe()","super→Animal.describe"], out:[] },
+
+    { line:[9], phase:"호출",
+      desc:"Dog.describe 로 복귀: <code>\"Rex makes a sound\" + \" (woof)\"</code> = <b>\"Rex makes a sound (woof)\"</b>.",
+      env:[F("describe 지역",[]),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this",kind:"thiss"}}),
+           F("super 환경",[["super","‹class Animal›"]],{dist:{label:"super",kind:"super"}}),
+           F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›"],["d","→ #1"]])],
+      insts:[I("#1","Dog instance",[["name","\"Rex\""]])], stk:["d.describe()"], out:[] },
+
+    { line:[14], phase:"출력",
+      desc:"<code>print</code> → 최종 출력.",
+      env:[F("전역 (global)",[["Animal","‹class Animal›"],["Dog","‹class Dog›"],["d","→ #1"]])],
+      insts:[I("#1","Dog instance",[["name","\"Rex\""]])], stk:[], out:["Rex makes a sound (woof)"] },
+  ]
+};
+
+/* ============================ EXAMPLE 2 ============================ */
+const ex2 = {
+  num:"예제 4", title:"A · B greet/who — super를 타도 this.who()는 다시 하위로",
+  goal:"super.greet() 안의 this.who() 가 B.who 로 디스패치되는 이유 (가상 메서드)",
+  src:[
+    'class A {',
+    '  greet() { return "Hi, I am " + this.who(); }',
+    '  who()   { return "an A"; }',
+    '}',
+    'class B < A {',
+    '  greet() { return super.greet(); }',
+    '  who()   { return "a B"; }',
+    '}',
+    'print B().greet();'
+  ],
+  take:'super는 <b>검색 시작점만 A로 올렸다</b>. this는 #1(B 인스턴스) 그대로라서, A의 본문에서 부른 <code>this.who()</code>는 다시 <b>#1의 클래스 B부터 탐색</b>해 <code>B.who</code>(오버라이드)를 잡는다. 이게 동적 디스패치(가상 메서드)다 — 출력은 <b>"Hi, I am a B"</b>.',
+  steps:[
+    { line:[], phase:"시작", desc:"전역만 있는 상태.",
+      env:[F("전역 (global)",[])], insts:[], stk:[], out:[] },
+
+    { line:[0,1,2,3], phase:"정의", desc:"<b>A</b> 정의. greet, who 두 메서드. 상위 없음 → 클로저는 전역. 전역에 <code>A</code>.",
+      env:[F("전역 (global)",[["A","‹class A›",1]])], insts:[], stk:[], out:[] },
+
+    { line:[4,5,6,7], phase:"정의", desc:"<b>B &lt; A</b> 정의. super 환경(super=A)을 끼우고 greet/who가 그걸 클로저로 잡는다. 전역에 <code>B</code>.",
+      env:[F("전역 (global)",[["A","‹class A›"],["B","‹class B›  (메서드 클로저: super=A)",1]])], insts:[], stk:[], out:[] },
+
+    { line:[8], phase:"생성", desc:"<code>B()</code> — init 없음(arity 0). 빈 인스턴스 #1을 만들어 반환.",
+      env:[F("전역 (global)",[["A","‹class A›"],["B","‹class B›"]])],
+      insts:[I("#1","B instance",[],{hot:true})], stk:["B()"], out:[] },
+
+    { line:[8], phase:"호출", desc:"<code>.greet()</code> 탐색: B에서 발견 → <b>B.greet</b>를 #1에 bind.",
+      env:[F("전역 (global)",[["A","‹class A›"],["B","‹class B›"]])],
+      insts:[I("#1","B instance",[])], stk:["#1.greet()"], out:[] },
+
+    { line:[5], phase:"호출", desc:"B.greet 실행. <b>this 환경(this=#1) → super 환경(super=A)</b>. 본문은 그냥 <code>super.greet()</code>.",
+      env:[F("greet 지역",[],{hot:true}),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this",kind:"thiss"}}),
+           F("super 환경",[["super","‹class A›"]],{dist:{label:"super",kind:"super"}}),
+           F("전역 (global)",[["A","‹class A›"],["B","‹class B›"]])],
+      insts:[I("#1","B instance",[])], stk:["#1.greet()"], out:[] },
+
+    { line:[5], phase:"호출 · super 평가", desc:"<code>super.greet()</code>: super(거리 d)=A, this(거리 d−1)=#1. <b>A.greet 를 #1에 다시 bind</b> — this는 여전히 #1!",
+      env:[F("greet 지역(A)",[],{hot:true}),
+           F("this 환경",[["this","→ #1",1]],{dist:{label:"this = #1",kind:"thiss"}}),
+           F("전역 (global)",[["A","‹class A›"],["B","‹class B›"]])],
+      insts:[I("#1","B instance",[])], stk:["#1.greet()","super→A.greet"], out:[] },
+
+    { line:[1], phase:"호출 · 디스패치", desc:"A.greet 본문 <code>\"Hi, I am \" + this.who()</code>. <code>this.who()</code> 호출 — this=#1, 그 <b>클래스는 B</b>다. who 탐색을 <b>B부터</b> 시작한다.",
+      env:[F("greet 지역(A)",[]),
+           F("this 환경",[["this","→ #1",1]],{dist:{label:"this = #1 (class B!)",kind:"thiss"}}),
+           F("전역 (global)",[["A","‹class A›"],["B","‹class B›"]])],
+      insts:[I("#1","B instance",[],{hot:true})], stk:["#1.greet()","super→A.greet"], out:[] },
+
+    { line:[6], phase:"호출 · 디스패치", desc:"B에 who가 있다(오버라이드) → <b>B.who 호출</b>. (A.who가 아니다!) <code>\"a B\"</code> 반환.",
+      env:[F("who 지역(B)",[],{hot:true}),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this",kind:"thiss"}}),
+           F("전역 (global)",[["A","‹class A›"],["B","‹class B›"]])],
+      insts:[I("#1","B instance",[])], stk:["#1.greet()","super→A.greet","this.who→B.who"], out:[] },
+
+    { line:[1], phase:"호출", desc:"A.greet로 복귀: <code>\"Hi, I am \" + \"a B\"</code> = <b>\"Hi, I am a B\"</b>.",
+      env:[F("greet 지역(A)",[]),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this",kind:"thiss"}}),
+           F("전역 (global)",[["A","‹class A›"],["B","‹class B›"]])],
+      insts:[I("#1","B instance",[])], stk:["#1.greet()","super→A.greet"], out:[] },
+
+    { line:[8], phase:"출력", desc:"B.greet도 같은 값 반환 → <code>print</code>.",
+      env:[F("전역 (global)",[["A","‹class A›"],["B","‹class B›"]])],
+      insts:[I("#1","B instance",[])], stk:[], out:["Hi, I am a B"] },
+  ]
+};
+
+/* ============================ EXAMPLE 3 ============================ */
+const ex3 = {
+  num:"예제 5", title:"책 본문 — C().test() 가 \"A method\"를 찍는 이유",
+  goal:"super는 수신자(C)가 아니라 메서드가 정의된 클래스(B)의 상위(A)를 가리킨다",
+  src:[
+    'class A { method() { print "A method"; } }',
+    'class B < A {',
+    '  method() { print "B method"; }',
+    '  test()   { super.method(); }',
+    '}',
+    'class C < B {}',
+    'C().test();'
+  ],
+  take:'<code>test</code>는 <b>B에 정의</b>됐다. 그래서 test의 클로저에 들어있는 super 환경은 <b>B의 상위 = A</b>다. 수신자가 C든 뭐든 상관없다. 만약 "인스턴스(C)의 상위"로 잘못 구현하면 super가 B를 가리켜 <code>B.method</code>가 다시 불려 <b>무한 루프</b>가 된다.',
+  steps:[
+    { line:[], phase:"시작", desc:"전역만 있는 상태.",
+      env:[F("전역 (global)",[])], insts:[], stk:[], out:[] },
+
+    { line:[0], phase:"정의", desc:"<b>A</b> 정의. 상위 없음. 전역에 <code>A</code>.",
+      env:[F("전역 (global)",[["A","‹class A›",1]])], insts:[], stk:[], out:[] },
+
+    { line:[1,2,3,4], phase:"정의", desc:"<b>B &lt; A</b> 정의. super 환경(<b>super=A</b>)을 끼우고 <code>method</code>·<code>test</code>가 그걸 클로저로 잡는다. ← test의 super는 이 시점에 A로 고정된다.",
+      env:[F("전역 (global)",[["A","‹class A›"],["B","‹class B›  (test 클로저: super=A)",1]])], insts:[], stk:[], out:[] },
+
+    { line:[5], phase:"정의", desc:"<b>C &lt; B</b> 정의. super 환경(super=B)을 끼우지만 <b>C엔 메서드가 없다</b>. 전역에 <code>C</code>.",
+      env:[F("전역 (global)",[["A","‹class A›"],["B","‹class B›"],["C","‹class C›  (메서드 없음)",1]])], insts:[], stk:[], out:[] },
+
+    { line:[6], phase:"생성", desc:"<code>C()</code> — init 없음. 빈 인스턴스 #1(클래스 C)을 만들어 반환.",
+      env:[F("전역 (global)",[["A","‹class A›"],["B","‹class B›"],["C","‹class C›"]])],
+      insts:[I("#1","C instance",[],{hot:true})], stk:["C()"], out:[] },
+
+    { line:[6], phase:"호출", desc:"<code>.test()</code> 탐색: C엔 없음 → <b>B에서 test 발견</b>. 이걸 #1에 bind.",
+      env:[F("전역 (global)",[["A","‹class A›"],["B","‹class B›"],["C","‹class C›"]])],
+      insts:[I("#1","C instance",[])], stk:["#1.test()"], out:[] },
+
+    { line:[3], phase:"호출", desc:"B.test 실행. 클로저가 <b>B의 super 환경(super=A)</b>이라, this 환경(this=#1) 아래에 <b>super=A</b>가 깔린다. 수신자가 C여도 super는 A!",
+      env:[F("test 지역",[],{hot:true}),
+           F("this 환경",[["this","→ #1 (class C)"]],{dist:{label:"this",kind:"thiss"}}),
+           F("super 환경",[["super","‹class A›"]],{dist:{label:"super = A (B의 상위)",kind:"super"}}),
+           F("전역 (global)",[["A","‹class A›"],["B","‹class B›"],["C","‹class C›"]])],
+      insts:[I("#1","C instance",[])], stk:["#1.test()"], out:[] },
+
+    { line:[3], phase:"호출 · super 평가", desc:"<code>super.method()</code>: super(거리 d)=<b>A</b>, this(거리 d−1)=#1. <b>A.method</b>를 찾는다 — B.method가 아니다!",
+      env:[F("test 지역",[]),
+           F("this 환경",[["this","→ #1",1]],{dist:{label:"거리 d−1 · this",kind:"thiss"}}),
+           F("super 환경",[["super","‹class A›",1]],{dist:{label:"거리 d · super = A",kind:"super"}}),
+           F("전역 (global)",[["A","‹class A›"],["B","‹class B›"],["C","‹class C›"]])],
+      insts:[I("#1","C instance",[])], stk:["#1.test()"], out:[] },
+
+    { line:[0], phase:"출력", desc:"A.method 를 #1에 bind 해 실행 → <code>print \"A method\"</code>. (만약 super가 B였다면 B.method→super.method→… 무한 루프였을 것.)",
+      env:[F("method 지역(A)",[],{hot:true}),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this",kind:"thiss"}}),
+           F("전역 (global)",[["A","‹class A›"],["B","‹class B›"],["C","‹class C›"]])],
+      insts:[I("#1","C instance",[])], stk:["#1.test()","super→A.method"], out:["A method"] },
+  ]
+};
+
+/* ===================== EXAMPLE (12장) · this 캡처 ===================== */
+const exThis = {
+  num:"예제 1", title:"this 는 환경에 든 변수 — 중첩 함수가 클로저로 붙잡는다",
+  goal:"메서드가 끝났는데도 콜백 안의 this.name 이 살아있는 이유 (12.6)",
+  src:[
+    'class Thing {',
+    '  getCallback() {',
+    '    fun localFunction() { print this.name; }',
+    '    return localFunction;',
+    '  }',
+    '}',
+    '',
+    'var t = Thing();',
+    't.name = "thing-name";',
+    't.getCallback()();'
+  ],
+  take:'<b>this</b>는 메서드를 bind할 때 만든 <b>this 환경</b>에 담긴 평범한 변수다. 메서드 안에서 선언한 <code>localFunction</code>이 그 환경을 <b>클로저로 붙잡으면</b>, getCallback이 반환돼 사라진 뒤에도 this(=#1)는 살아남는다. ← this를 "환경에 넣는" 설계가 바로 이걸 가능하게 한다.',
+  steps:[
+    { line:[], phase:"시작", desc:"전역만 있는 상태.",
+      env:[F("전역 (global)",[])], insts:[], stk:[], out:[] },
+
+    { line:[0,1,2,3,4,5], phase:"정의", desc:"<b>Thing</b> 정의. 메서드 getCallback 하나. 상위 없음 → 클로저는 전역. 전역에 <code>Thing</code>.",
+      env:[F("전역 (global)",[["Thing","‹class Thing›",1]])], insts:[], stk:[], out:[] },
+
+    { line:[7], phase:"생성", desc:"<code>Thing()</code> — init 없음. 빈 인스턴스 #1을 만들고 <code>t = #1</code>.",
+      env:[F("전역 (global)",[["Thing","‹class Thing›"],["t","→ #1",1]])],
+      insts:[I("#1","Thing instance",[],{hot:true})], stk:[], out:[] },
+
+    { line:[8], phase:"필드 설정", desc:"<code>t.name = \"thing-name\"</code> — Set: t를 평가해 #1을 얻고, 그 <b>필드 name</b>을 박는다.",
+      env:[F("전역 (global)",[["Thing","‹class Thing›"],["t","→ #1"]])],
+      insts:[I("#1","Thing instance",[["name","\"thing-name\"",1]],{hot:true})], stk:[], out:[] },
+
+    { line:[9,1], phase:"호출", desc:"<code>t.getCallback()</code> — getCallback을 #1에 bind. <b>this 환경(this=#1)</b>이 전역 위에 깔리고 본문에 진입.",
+      env:[F("getCallback 지역",[],{hot:true}),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this",kind:"thiss"}}),
+           F("전역 (global)",[["Thing","‹class Thing›"],["t","→ #1"]])],
+      insts:[I("#1","Thing instance",[["name","\"thing-name\""]])], stk:["t.getCallback()"], out:[] },
+
+    { line:[2], phase:"호출 · 클로저", desc:"<code>fun localFunction</code> 선언. 이 함수의 값은 <b>현재 환경 전체를 클로저로 붙잡는다</b> — getCallback 지역 → <b>this 환경</b> → 전역. ← this가 여기 끼어 있는 게 핵심.",
+      env:[F("getCallback 지역",[["localFunction","‹fn localFunction›  (클로저 ↓)",1]],{hot:true}),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"클로저가 붙잡음",kind:"thiss"}}),
+           F("전역 (global)",[["Thing","‹class Thing›"],["t","→ #1"]])],
+      insts:[I("#1","Thing instance",[["name","\"thing-name\""]])], stk:["t.getCallback()"], out:[] },
+
+    { line:[3], phase:"호출 · 반환", desc:"<code>return localFunction</code> — getCallback이 끝나고 콜스택에서 빠진다. <b>하지만</b> 반환된 함수가 this 환경을 붙잡고 있어 <u>GC되지 않고 살아있다</u>.",
+      env:[F("전역 (global)",[["Thing","‹class Thing›"],["t","→ #1"]])],
+      insts:[I("#1","Thing instance",[["name","\"thing-name\""]])], stk:[], out:[] },
+
+    { line:[9], phase:"호출 · 두 번째 ()", desc:"반환된 <code>localFunction</code>을 곧바로 <code>()</code>로 호출. 새 지역 환경 아래로 <b>클로저가 복원</b>된다 — getCallback 지역, this 환경까지 그대로.",
+      env:[F("localFunction 지역",[],{hot:true}),
+           F("getCallback 지역 (클로저)",[["localFunction","‹fn›"]]),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this · 되살아남",kind:"thiss"}}),
+           F("전역 (global)",[["Thing","‹class Thing›"],["t","→ #1"]])],
+      insts:[I("#1","Thing instance",[["name","\"thing-name\""]])], stk:["localFunction()"], out:[] },
+
+    { line:[2], phase:"호출", desc:"<code>print this.name</code> — 환경 체인을 거슬러 <b>this 환경의 this=#1</b>을 찾고, <code>#1.name</code>을 읽는다.",
+      env:[F("localFunction 지역",[]),
+           F("getCallback 지역 (클로저)",[["localFunction","‹fn›"]]),
+           F("this 환경",[["this","→ #1",1]],{dist:{label:"this",kind:"thiss"}}),
+           F("전역 (global)",[["Thing","‹class Thing›"],["t","→ #1"]])],
+      insts:[I("#1","Thing instance",[["name","\"thing-name\"",1]],{hot:true})], stk:["localFunction()"], out:[] },
+
+    { line:[2], phase:"출력", desc:"<code>#1.name</code> = \"thing-name\" 출력. 메서드는 진작 끝났지만 this는 클로저 덕에 살아 있었다.",
+      env:[F("전역 (global)",[["Thing","‹class Thing›"],["t","→ #1"]])],
+      insts:[I("#1","Thing instance",[["name","\"thing-name\""]])], stk:[], out:["thing-name"] },
+  ]
+};
+
+/* ===================== EXAMPLE (12장) · init 생성자 ===================== */
+const exInit = {
+  num:"예제 2", title:"init — 클래스 호출이 인스턴스를 만들고 항상 this를 반환",
+  goal:"Circle(4) 가 어떻게 인스턴스를 만들고 radius를 초기화하는가 (12.7)",
+  src:[
+    'class Circle {',
+    '  init(radius) { this.radius = radius; }',
+    '  area() { return 3.14159 * this.radius * this.radius; }',
+    '}',
+    'print Circle(4).area();'
+  ],
+  take:'클래스 호출 <code>Circle(4)</code>는 ① 빈 인스턴스를 만들고 ② <code>init</code>을 그 인스턴스에 bind해 인자와 함께 실행하고 ③ <b>무조건 그 인스턴스(this)를 반환</b>한다. <code>arity()</code>도 init의 파라미터 수(1)에서 가져온다. init은 <code>this.radius = ...</code>로 인스턴스 상태를 박는 평범한 메서드일 뿐이다.',
+  steps:[
+    { line:[], phase:"시작", desc:"전역만 있는 상태.",
+      env:[F("전역 (global)",[])], insts:[], stk:[], out:[] },
+
+    { line:[0,1,2,3], phase:"정의", desc:"<b>Circle</b> 정의. 메서드 <code>init</code>·<code>area</code>. 전역에 <code>Circle</code>. <span class='empty'>※ init도 그냥 메서드 — 이름이 init일 뿐.</span>",
+      env:[F("전역 (global)",[["Circle","‹class Circle›",1]])], insts:[], stk:[], out:[] },
+
+    { line:[4], phase:"생성", desc:"<code>Circle(4)</code> — 클래스를 호출. LoxClass.call()이 ① 빈 인스턴스 #1을 만들고, <code>findMethod(\"init\")</code>으로 init을 찾아 #1에 bind. <span class='empty'>arity = init의 파라미터 수 = 1.</span>",
+      env:[F("전역 (global)",[["Circle","‹class Circle›"]])],
+      insts:[I("#1","Circle instance",[],{hot:true})], stk:["Circle(4)"], out:[] },
+
+    { line:[1], phase:"생성 · init", desc:"init 실행. <b>this 환경(this=#1)</b> 위에 인자 <code>radius=4</code>.",
+      env:[F("init 지역",[["radius","4",1]],{hot:true}),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this",kind:"thiss"}}),
+           F("전역 (global)",[["Circle","‹class Circle›"]])],
+      insts:[I("#1","Circle instance",[])], stk:["Circle(4)","Circle.init"], out:[] },
+
+    { line:[1], phase:"생성 · init", desc:"<code>this.radius = radius</code> → 인스턴스 #1의 <b>필드 radius = 4</b>가 박힌다.",
+      env:[F("init 지역",[["radius","4"]]),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this",kind:"thiss"}}),
+           F("전역 (global)",[["Circle","‹class Circle›"]])],
+      insts:[I("#1","Circle instance",[["radius","4",1]],{hot:true})], stk:["Circle(4)","Circle.init"], out:[] },
+
+    { line:[4], phase:"생성 · 반환", desc:"init이 끝나면 생성자는 <b>반환값을 무시하고 무조건 this(#1)를 반환</b>한다(isInitializer). 그래서 <code>Circle(4)</code>의 결과 = #1.",
+      env:[F("전역 (global)",[["Circle","‹class Circle›"]])],
+      insts:[I("#1","Circle instance",[["radius","4"]])], stk:[], out:[] },
+
+    { line:[2], phase:"호출", desc:"이어서 <code>.area()</code> — area를 #1에 bind. <b>this 환경(this=#1)</b> 위에서 <code>3.14159 * this.radius * this.radius</code> 평가.",
+      env:[F("area 지역",[],{hot:true}),
+           F("this 환경",[["this","→ #1"]],{dist:{label:"this",kind:"thiss"}}),
+           F("전역 (global)",[["Circle","‹class Circle›"]])],
+      insts:[I("#1","Circle instance",[["radius","4"]])], stk:["Circle(4).area()"], out:[] },
+
+    { line:[2], phase:"호출", desc:"<code>this.radius</code> 읽기 → #1.radius = 4. → <code>3.14159 × 4 × 4</code> = <b>50.26544</b>.",
+      env:[F("area 지역",[]),
+           F("this 환경",[["this","→ #1",1]],{dist:{label:"this",kind:"thiss"}}),
+           F("전역 (global)",[["Circle","‹class Circle›"]])],
+      insts:[I("#1","Circle instance",[["radius","4",1]],{hot:true})], stk:["Circle(4).area()"], out:[] },
+
+    { line:[4], phase:"출력", desc:"<code>print</code> → 최종 출력.",
+      env:[F("전역 (global)",[["Circle","‹class Circle›"]])],
+      insts:[I("#1","Circle instance",[["radius","4"]])], stk:[], out:["50.26544"] },
+  ]
+};
+
+const EXAMPLES = [exThis, exInit, ex1, ex2, ex3];
+
+/* ---------- syntax highlight (very light) ---------- */
+const KW = /\b(class|init|return|print|var|this|super|fun|nil|true|false)\b/g;
+function hl(line){
+  let s = line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  // comments
+  s = s.replace(/(\/\/.*)$/,'<span class="c">$1</span>');
+  // strings
+  s = s.replace(/("[^"]*")/g,'<span class="s">$1</span>');
+  // keywords (avoid inside spans roughly — fine for our short lines)
+  s = s.replace(KW,'<span class="k">$1</span>');
+  return s;
+}
+
+/* ---------- rendering ---------- */
+let exIdx = 0, stepIdx = 0, timer = null;
+
+const $ = id => document.getElementById(id);
+
+function renderTabs(){
+  const t = $("tabs"); t.innerHTML = "";
+  EXAMPLES.forEach((e,i)=>{
+    const b = document.createElement("button");
+    b.textContent = e.num + " · " + e.title.split(" — ")[0];
+    b.className = i===exIdx ? "on" : "";
+    b.onclick = ()=>{ stop(); exIdx=i; stepIdx=0; renderAll(); };
+    t.appendChild(b);
+  });
+}
+
+function renderSrc(){
+  const e = EXAMPLES[exIdx], st = e.steps[stepIdx];
+  const hot = new Set(st.line);
+  $("src").innerHTML = e.src.map((ln,i)=>
+    `<span class="ln${hot.has(i)?' hot':''}" data-n="${i+1}">${hl(ln)||' '}</span>`
+  ).join("");
+}
+
+function frameHTML(fr){
+  const dist = fr.dist ? `<span class="dist ${fr.dist.kind}">${fr.dist.label}</span>` : "";
+  let binds;
+  if(!fr.binds.length){ binds = `<div class="empty">— 비어 있음 —</div>`; }
+  else binds = `<div class="binds">` + fr.binds.map(b=>{
+    const mark = b[2] ? " mark" : "";
+    return `<div class="bind${mark}"><span class="bk">${b[0]}</span><span class="eq">=</span><span class="bv">${b[1]}</span></div>`;
+  }).join("") + `</div>`;
+  return `<div class="frame${fr.hot?' hot':''}"><div class="fh"><span class="fname">${fr.name}</span>${dist}</div>${binds}</div>`;
+}
+
+function renderEnv(){
+  const st = EXAMPLES[exIdx].steps[stepIdx];
+  const parts = [];
+  st.env.forEach((fr,i)=>{
+    parts.push(frameHTML(fr));
+    if(i < st.env.length-1) parts.push(`<div class="lnk">▼ enclosing</div>`);
+  });
+  $("env").innerHTML = parts.join("");
+}
+
+function renderInsts(){
+  const st = EXAMPLES[exIdx].steps[stepIdx];
+  if(!st.insts.length){ $("insts").innerHTML = `<div class="empty">— 아직 없음 —</div>`; return; }
+  $("insts").innerHTML = st.insts.map(o=>{
+    const f = o.fields.length
+      ? o.fields.map(fl=>`<span class="${fl[2]?'mk':''}">${fl[0]}: ${fl[1]}</span>`).join("&nbsp;&nbsp;")
+      : '<span class="empty">필드 없음</span>';
+    return `<div class="inst${o.hot?' hot':''}"><div class="ih">${o.name} · ${o.klass}</div><div class="if">${f}</div></div>`;
+  }).join("");
+}
+
+function renderStk(){
+  const st = EXAMPLES[exIdx].steps[stepIdx];
+  if(!st.stk.length){ $("stk").innerHTML = `<div class="empty">— 비어 있음 —</div>`; return; }
+  $("stk").innerHTML = st.stk.map((s,i)=>
+    `<div class="sf${i===st.stk.length-1?' top':''}">${s}</div>`).join("");
+}
+
+function renderTerm(){
+  const st = EXAMPLES[exIdx].steps[stepIdx];
+  $("term").innerHTML = st.out.length
+    ? st.out.map(o=>o).join("\n")
+    : `<span class="muted">(출력 없음)</span>`;
+}
+
+function renderNarr(){
+  const st = EXAMPLES[exIdx].steps[stepIdx];
+  $("narr").innerHTML = `<span class="ph">${st.phase}</span><br>${st.desc}`;
+}
+
+function renderHead(){
+  const e = EXAMPLES[exIdx];
+  $("exn").textContent = e.num;
+  $("ext").textContent = e.title;
+  $("exg").textContent = "— " + e.goal;
+  $("take").innerHTML = "<b>요점.</b> " + e.take;
+}
+
+function renderControls(){
+  const e = EXAMPLES[exIdx];
+  $("cnt").textContent = `${stepIdx+1} / ${e.steps.length}`;
+  $("prev").disabled = stepIdx===0;
+  $("next").disabled = stepIdx===e.steps.length-1;
+  const sl = $("slider"); sl.max = e.steps.length-1; sl.value = stepIdx;
+}
+
+function renderAll(){
+  renderTabs(); renderHead(); renderSrc(); renderEnv();
+  renderInsts(); renderStk(); renderTerm(); renderNarr(); renderControls();
+}
+
+function go(d){
+  const e = EXAMPLES[exIdx];
+  stepIdx = Math.max(0, Math.min(e.steps.length-1, stepIdx+d));
+  renderAll();
+}
+function stop(){ if(timer){ clearInterval(timer); timer=null; $("play").textContent="▶ 자동"; $("play").classList.remove("on"); } }
+
+$("next").onclick = ()=>{ stop(); go(1); };
+$("prev").onclick = ()=>{ stop(); go(-1); };
+$("reset").onclick = ()=>{ stop(); stepIdx=0; renderAll(); };
+$("slider").oninput = (ev)=>{ stop(); stepIdx=+ev.target.value; renderAll(); };
+$("play").onclick = ()=>{
+  if(timer){ stop(); return; }
+  $("play").textContent="⏸ 멈춤"; $("play").classList.add("on");
+  timer = setInterval(()=>{
+    const e = EXAMPLES[exIdx];
+    if(stepIdx >= e.steps.length-1){ stop(); return; }
+    go(1);
+  }, 1500);
+};
+document.addEventListener("keydown",(e)=>{
+  if(e.key==="ArrowRight"){ stop(); go(1); }
+  else if(e.key==="ArrowLeft"){ stop(); go(-1); }
+});
+
+renderAll();
+</script>
+</body>
+</html>
